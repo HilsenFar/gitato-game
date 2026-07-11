@@ -20016,6 +20016,7 @@ void main() {
       comp.connect(clip);
       clip.connect(this.ctx.destination);
       this.limiter = comp;
+      this.recordTap = clip;
       this.analyser = this.ctx.createAnalyser();
       this.analyser.fftSize = 2048;
       this.analyser.smoothingTimeConstant = 0;
@@ -20036,8 +20037,11 @@ void main() {
     }
     // 1.0 normal, 0.6 practice
     // Mark the moment the song starts so songTime() is exact.
-    markStart(bpm, beatOffset = 0) {
-      this._startTime = this.now;
+    // Pass the SCHEDULED start time (the `startAt` the audio was start()ed with) —
+    // anchoring to `now` made songTime run the scheduling margin (~120 ms) ahead
+    // of the audible track, which is 3x the perfect-judgement window.
+    markStart(bpm, beatOffset = 0, startTime = null) {
+      this._startTime = startTime != null ? startTime : this.now;
       this.bpm = bpm;
       this.beatOffset = beatOffset;
     }
@@ -20360,6 +20364,7 @@ void main() {
         rg.connect(this.out);
         this._rumbleVerb = verb;
         this._rumbleGain = rg;
+        this._rumbleChain = [dist, lp, hp, rg];
       }
       let gate = null;
       if (beatEnergy && beatEnergy.length > 4) {
@@ -20416,6 +20421,21 @@ void main() {
         }
       }
       this.nodes = [];
+      if (this._rumbleChain) {
+        try {
+          this._rumbleConvolver && this._rumbleConvolver.disconnect();
+        } catch (e) {
+        }
+        for (const n of this._rumbleChain) {
+          try {
+            n.disconnect();
+          } catch (e) {
+          }
+        }
+        this._rumbleChain = null;
+        this._rumbleGain = null;
+        this._rumbleVerb = null;
+      }
     }
     _kick(t, r, vel = 1) {
       const lvl = this._runAmount != null ? this._runAmount : this.amount;
@@ -20440,7 +20460,7 @@ void main() {
   var GENRES = {
     hardstyle: { bpm: 150, themeBias: "industrial", screech: 0.5, bass: "offbeat", lead: "supersaw", hats: "offbeat", clap: true },
     classichardstyle: { bpm: 145, themeBias: "industrial", screech: 0.4, bass: "offbeat", lead: "hoover", hats: "offbeat", clap: true },
-    rawstyle: { bpm: 155, themeBias: "industrial", screech: 0.8, bass: "offbeat", lead: "screech", hats: "offbeat", clap: true },
+    rawstyle: { bpm: 155, themeBias: "industrial", screech: 0.8, bass: "roll", lead: "screech", hats: "offbeat", clap: true },
     hardcore: { bpm: 165, themeBias: "industrial", screech: 0.6, bass: "none", lead: "hoover", hats: "sixteenth", clap: true },
     gabber: { bpm: 175, themeBias: "industrial", screech: 0.4, bass: "none", lead: "hoover", hats: "offbeat", clap: false },
     industrialhardcore: { bpm: 185, themeBias: "industrial", screech: 0.5, bass: "none", lead: "screech", hats: "sixteenth", clap: false },
@@ -20487,7 +20507,8 @@ void main() {
     // ---------------------------------------------------------------- compose
     // Build a full arrangement (internal synth events + gameplay reaction-map).
     // Returns { map, durationSec, seed, genre, themeBias, bpm }.
-    compose(genre = "hardstyle", seed = Math.random() * 1e9 | 0, bars = 64) {
+    // The arrangement is structurally fixed at 64 bars (intro/build/drop/break/drop/outro).
+    compose(genre = "hardstyle", seed = Math.random() * 1e9 | 0) {
       this.seed = seed;
       this.rng = mulberry32(seed);
       this.genre = genre;
@@ -20515,6 +20536,7 @@ void main() {
         { name: "outro", bars: 8 }
       ];
       const chordDegrees = [0, 5, 2, 6];
+      const tone = (d) => root + scale[d % scale.length] + Math.floor(d / scale.length) * 12;
       let barIdx = 0;
       for (const sec of plan) {
         const t0 = barIdx * bar;
@@ -20527,7 +20549,7 @@ void main() {
           const bt = (barIdx + b) * bar;
           const isDrop = !!sec.drop;
           const chordDeg = chordDegrees[(barIdx + b >> 1) % 4];
-          const chordRoot = root + scale[chordDeg % scale.length] + (chordDeg >= 5 ? -12 : 0);
+          const chordRoot = tone(chordDeg) + (chordDeg >= 5 ? -12 : 0);
           if (sec.name !== "intro" && sec.name !== "break") {
             let vel = 1;
             if (sec.name === "build") vel = 0.85;
@@ -20546,7 +20568,7 @@ void main() {
           }
           if (isDrop || sec.name === "build" && b >= 2 || sec.name === "outro") {
             const bvel = sec.name === "outro" ? Math.max(0.3, 1 - b / sec.bars) : isDrop ? 1 : 0.7;
-            const bf = midiHz(chordRoot - 24);
+            const bf = midiHz(chordRoot - 12);
             if (g.bass === "offbeat") {
               for (let beat = 0; beat < 4; beat++)
                 ev.push({ t: bt + beat * spb + spb / 2, type: "bassOff", f: bf, dur: spb * 0.42, vel: bvel });
@@ -20586,12 +20608,17 @@ void main() {
                 notes.push({ t, band: "high", kind: "oneshot", oneShot: true, theme: g.themeBias });
               } else {
                 ev.push({ t, type: "lead", style: g.lead, f: midiHz(midi), cutoff, dur, vel: lvel, accent: st.accent });
-                notes.push({ t, band: octUp > 0 ? "high" : "mid", kind: "stab" });
+                const dense = g.lead === "pluck" || g.lead === "acid";
+                if (!dense || st.accent || s % 2 === 0) {
+                  notes.push({ t, band: octUp > 0 ? "high" : "mid", kind: "stab" });
+                }
               }
             }
           }
           if ((sec.name === "intro" || sec.name === "break" || sec.name === "outro") && b % 2 === 0) {
-            const cf = [chordRoot, chordRoot + scale[2], chordRoot + 7, chordRoot + 12];
+            const third = tone(chordDeg + 2) - tone(chordDeg);
+            const fifth = tone(chordDeg + 4) - tone(chordDeg);
+            const cf = [chordRoot, chordRoot + third, chordRoot + fifth, chordRoot + 12];
             ev.push({ t: bt, type: "pad", fs: cf.map(midiHz), dur: bar * 2 });
           }
           if (sec.name !== "intro" && sec.name !== "break") {
@@ -20667,8 +20694,8 @@ void main() {
     // (practice slow-mode): event times/durations stretch by 1/rate.
     play(startAt, rate = 1) {
       this.stopPlayback();
-      this._buildGraph();
       const inv = 1 / (rate || 1);
+      this._buildGraph(inv);
       let i = 0;
       const horizon = 2.5;
       const pumpMs = 400;
@@ -20693,8 +20720,8 @@ void main() {
     // OfflineAudioContext renders faster than real time so the pump can't keep up).
     scheduleAll(startAt, rate = 1) {
       this.stopPlayback();
-      this._buildGraph();
       const inv = 1 / (rate || 1);
+      this._buildGraph(inv);
       for (const e of this._events) this._synth(e, startAt + e.t * inv, inv);
     }
     stop() {
@@ -20720,8 +20747,10 @@ void main() {
         this._graph = null;
       }
     }
-    // per-run mixer graph: element gains → (duckable) duck → bus → musicGain
-    _buildGraph() {
+    // per-run mixer graph: element gains → (duckable) duck → bus → musicGain.
+    // inv = 1/rate so the tempo-synced delay stays a dotted 8th on the STRETCHED
+    // grid in practice slow-mode.
+    _buildGraph(inv = 1) {
       const ctx = this.ctx;
       const bus = ctx.createGain();
       bus.gain.value = 0.85;
@@ -20742,7 +20771,7 @@ void main() {
       const perc = mk(0.3, false);
       const fx = mk(0.35, false);
       const delay = ctx.createDelay(2);
-      delay.delayTime.value = 60 / this.bpm * 0.75;
+      delay.delayTime.value = 60 / this.bpm * 0.75 * inv;
       const fb = ctx.createGain();
       fb.gain.value = 0.3;
       const dlp = ctx.createBiquadFilter();
@@ -22475,7 +22504,9 @@ void main() {
       if (this.recording) return;
       const vstream = this.canvas.captureStream(60);
       const dest = this.clock.ctx.createMediaStreamDestination();
-      this.clock.master.connect(dest);
+      this._tap = this.clock.recordTap || this.clock.master;
+      this._dest = dest;
+      this._tap.connect(dest);
       for (const tr of dest.stream.getAudioTracks()) vstream.addTrack(tr);
       const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus") ? "video/webm;codecs=vp9,opus" : "video/webm";
       this.rec = new MediaRecorder(vstream, { mimeType: mime, videoBitsPerSecond: 24e6 });
@@ -22491,6 +22522,12 @@ void main() {
       return new Promise((res) => {
         this.rec.onstop = () => {
           this.recording = false;
+          try {
+            this._tap && this._dest && this._tap.disconnect(this._dest);
+          } catch (e) {
+          }
+          this._tap = null;
+          this._dest = null;
           res(new Blob(this.chunks, { type: "video/webm" }));
         };
         this.rec.stop();
@@ -22669,6 +22706,7 @@ void main() {
     }
     _next() {
       if (!this.playing) return;
+      clearTimeout(this._timer);
       try {
         this.gen.stop();
       } catch (e) {
@@ -22676,7 +22714,7 @@ void main() {
       const genre = this.taste.pick();
       const comp = this.gen.compose(genre);
       const startAt = this.clock.ctx.currentTime + 0.1;
-      this.clock.markStart(comp.bpm, 0);
+      this.clock.markStart(comp.bpm, 0, startAt);
       this.gen.play(startAt);
       this.current = { genre, bpm: comp.bpm, durationSec: comp.durationSec, startedAt: startAt, comp };
       if (this.onTrack) this.onTrack(this.current);
@@ -22845,19 +22883,29 @@ void main() {
     for (let f = 1; f < frames; f++) {
       onsetAll[f] = Math.max(0, lowE[f] - lowE[f - 1]) + Math.max(0, midE[f] - midE[f - 1]) + Math.max(0, highE[f] - highE[f - 1]);
     }
-    let bestBpm = 150, bestScore = -1;
-    for (let bpm = 130; bpm <= 210; bpm++) {
-      const lag = Math.round(60 / bpm * fps);
+    const lagMin = Math.max(2, Math.floor(60 / 260 * fps));
+    const lagMax = Math.min(frames - 1, Math.ceil(60 / 110 * fps));
+    const ac = new Float32Array(lagMax + 2);
+    let bestLag = lagMin, bestScore = -1;
+    for (let lag = lagMin; lag <= lagMax; lag++) {
       let s = 0;
       for (let f = lag; f < frames; f++) s += onset[f] * onset[f - lag];
+      ac[lag] = s;
       if (s > bestScore) {
         bestScore = s;
-        bestBpm = bpm;
+        bestLag = lag;
       }
     }
-    while (bestBpm < 135) bestBpm *= 2;
-    while (bestBpm > 220) bestBpm /= 2;
-    bestBpm = Math.round(bestBpm);
+    let refinedLag = bestLag;
+    if (bestLag > lagMin && bestLag < lagMax) {
+      const a = ac[bestLag - 1], b = ac[bestLag], c = ac[bestLag + 1];
+      const den = a - 2 * b + c;
+      if (den !== 0) refinedLag = bestLag + Math.max(-0.5, Math.min(0.5, 0.5 * (a - c) / den));
+    }
+    let bestBpm = 60 * fps / refinedLag;
+    const cands = [bestBpm, bestBpm * 2, bestBpm / 2, bestBpm * 1.5, bestBpm / 1.5].filter((c) => c >= 135 && c <= 220);
+    if (cands.length) bestBpm = cands.reduce((p, c) => Math.abs(c - 160) < Math.abs(p - 160) ? c : p);
+    bestBpm = Math.round(bestBpm * 10) / 10;
     const secPerBeat = 60 / bestBpm;
     const lagF = secPerBeat * fps;
     let bestPhase = 0, bestPhaseScore = -1;
@@ -23054,7 +23102,7 @@ void main() {
     const out = document.getElementById("buffer-value");
     if (!slider || !out) return;
     const saved = parseFloat(localStorage.getItem("gitato.lead"));
-    const init = Number.isFinite(saved) ? Math.max(1, Math.min(10, saved)) : 2.5;
+    const init = Number.isFinite(saved) ? Math.max(1, Math.min(15, saved)) : 6;
     slider.value = String(init);
     out.textContent = init.toFixed(1) + "s";
     slider.addEventListener("input", () => {
@@ -23114,6 +23162,9 @@ void main() {
   var FORGE_LINES = ["summoning the kick\u2026", "bending the bass\u2026", "charging the drop\u2026", "aligning the grid\u2026", "waking the tribe\u2026"];
   async function startForge(mode, practice = false) {
     state.mode = mode;
+    state._kickRemoved = false;
+    state._beatEnergy = null;
+    state._useBuffer = null;
     showScreen("screen-forge");
     state.hud.show(false);
     const genreKeys = mode === "origins" ? ["hardcore", "hardstyle", "frenchcore", "psytrance"] : Object.keys(GENRES);
@@ -23137,6 +23188,7 @@ void main() {
         if (res && res.ok) {
           ({ map, durationSec, themeBias, bpm, audioUrl, audioFile } = res);
           state._kickRemoved = !!res.kickRemoved;
+          state._beatEnergy = res.beatEnergy || null;
         }
       }
     } catch (e) {
@@ -23183,7 +23235,8 @@ void main() {
       importedBuffer: state._useBuffer,
       practice,
       useImported: !!state._useBuffer,
-      useLocalAudio: !audioUrl && !state._useBuffer
+      useLocalAudio: !audioUrl && !state._useBuffer,
+      kickRemoved: state._kickRemoved
     });
   }
   var _jbWired = false;
@@ -23250,9 +23303,7 @@ void main() {
     }, 1500);
   }
   async function shareJukebox(track) {
-    if (bridge && bridge.saveAudio) {
-      toastJb("Saved & ready to share \u2197");
-    } else toastJb("Sharing available in the desktop build \u2197");
+    toastJb("Track sharing is coming soon \u2197");
   }
   async function onImportFile(e) {
     const file = e.target.files[0];
@@ -23266,6 +23317,7 @@ void main() {
     const { map, durationSec, bpm, beatEnergy } = await analyzeFile(audioBuf);
     state.importedBuffer = audioBuf;
     state._beatEnergy = beatEnergy;
+    state._kickRemoved = false;
     await beginRun({ genre: "imported", map, durationSec, themeBias: state.theme, bpm, importedBuffer: audioBuf, useLocalAudio: false, useImported: true });
   }
   async function showLocalLoops() {
@@ -23315,13 +23367,18 @@ void main() {
       const { map, durationSec, bpm, beatEnergy } = await analyzeFile(audioBuf);
       state.importedBuffer = audioBuf;
       state._beatEnergy = beatEnergy;
+      state._kickRemoved = false;
       await beginRun({ genre: "imported", map, durationSec, themeBias: state.theme, bpm, importedBuffer: audioBuf, useLocalAudio: false, useImported: true });
     } catch (e) {
       console.error(e);
       document.getElementById("forge-status").textContent = "error reading file";
     }
   }
-  async function beginRun({ genre, map, durationSec, themeBias, bpm, audioUrl, importedBuffer, practice, useLocalAudio, useImported }) {
+  async function beginRun({ genre, map, durationSec, themeBias, bpm, audioUrl, audioFile, importedBuffer, practice, useLocalAudio, useImported, kickRemoved = false }) {
+    let forgedBuf = null;
+    if (audioUrl) {
+      forgedBuf = await fetchDecode(audioUrl);
+    }
     state.scene.setAct(genre === "psytrance" ? "sunrise" : "intake");
     if (genre === "psytrance") state.scene.showTribute(state.tributeTex);
     state.game = new Game({
@@ -23342,25 +23399,33 @@ void main() {
     const av = document.getElementById("cockpit-avatar");
     av.src = ASSETS + "chars/" + (state.character || "nogender") + ".webp";
     av.classList.remove("hidden");
-    state.recorder.beginManifest({ seed: state.gen.seed, genre, theme: state.theme, bpm, durationSec });
+    state.recorder.beginManifest({
+      seed: state.gen.seed,
+      genre,
+      theme: state.theme,
+      bpm,
+      durationSec,
+      audioFile: audioFile || null,
+      mode: forgedBuf ? "forged" : useImported ? "imported" : "local"
+    });
     state.recorder.startCapture();
     state.hud.rec(true);
     const rate = practice ? 0.7 : 1;
     const startAt = state.clock.ctx.currentTime + 0.12;
-    state.clock.markStart(bpm, map.beatOffset || 0);
-    if (audioUrl) {
-      await playUrl(audioUrl, startAt, rate);
+    state.clock.markStart(bpm, map.beatOffset || 0, startAt);
+    if (forgedBuf) {
+      playBuffer(forgedBuf, startAt, rate);
     } else if (useImported && importedBuffer) {
       playBuffer(importedBuffer, startAt, rate);
     } else {
       state.gen.play(startAt, rate);
     }
-    if (state.kick && (audioUrl || useImported && importedBuffer)) {
+    if (state.kick && (forgedBuf || useImported && importedBuffer)) {
       state.kick.schedule(genre, bpm, durationSec || 90, startAt, {
         beatOffset: map.beatOffset || 0,
         beatEnergy: state._beatEnergy || null,
         rate,
-        force: !!state._kickRemoved
+        force: !!kickRemoved
       });
     }
     state.running = true;
@@ -23376,11 +23441,10 @@ void main() {
     src.start(at);
     state._musicSrc = src;
   }
-  async function playUrl(url, at, rate = 1) {
+  async function fetchDecode(url) {
     const r = await fetch(url);
     const b = await r.arrayBuffer();
-    const buf = await state.clock.ctx.decodeAudioData(b);
-    playBuffer(buf, at, rate);
+    return state.clock.ctx.decodeAudioData(b);
   }
   function idleLoop() {
     const dt = 1 / 60;
