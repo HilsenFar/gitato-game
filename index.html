@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GITATO – HilsenFar</title>
+  <meta name="description" content="REZ-style on-rails rhythm flyer for the hard-electronic underground. Play in your browser." />
+  <meta name="theme-color" content="#04060a" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+  <meta property="og:title" content="GITATO – HilsenFar" />
+  <meta property="og:description" content="On-rails lock-on rhythm flyer. Hard genres, synesthetic visuals, play free in the browser." />
+  <link rel="stylesheet" href="./style.css" />
+  <script>
+    // PWA: register only on real https deploys (not localhost dev, not Electron file://)
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- HUD overlay -->
+  <div id="hud" class="hidden">
+    <div id="hud-top">
+      <div id="combo"><span id="combo-x">x0</span><span id="combo-label">COMBO</span></div>
+      <div id="score-wrap"><span id="score">0</span><span id="score-label">SCORE</span></div>
+    </div>
+    <div id="hud-left">
+      <div id="energy-wrap"><div id="energy-bar"></div></div>
+      <div id="energy-label">ENERGY</div>
+    </div>
+    <div id="hud-right">
+      <div id="drop-wrap"><div id="drop-bar"></div></div>
+      <div id="drop-label">DROP</div>
+    </div>
+    <div id="judgement"></div>
+    <div id="rank-flash"></div>
+    <div id="rec-dot" class="hidden">● REC</div>
+    <div id="theme-badge"></div>
+  </div>
+
+  <!-- Reticle -->
+  <div id="reticle" class="hidden"></div>
+  <!-- In-game cockpit avatar (chosen Conduit) -->
+  <img id="cockpit-avatar" class="hidden" alt="" />
+
+  <!-- Menus -->
+  <div id="screen-title" class="screen">
+    <img id="logo" alt="GITATO" />
+    <div id="subtitle">HilsenFar</div>
+    <div class="menu">
+      <button class="btn primary" data-action="ascend">ASCEND <span>procedural · AI-forged track</span></button>
+      <button class="btn" data-action="origins">ORIGINS <span>history of the harder styles</span></button>
+      <button class="btn" data-action="import">IMPORT TRACK <span>play your own audio</span></button>
+      <button class="btn" data-action="jukebox">PLAY MUSIC <span>endless generated mix · no gameplay</span></button>
+      <button class="btn" data-action="practice">PRACTICE <span>slow-mode, wider windows</span></button>
+      <button class="btn" data-action="settings">SETTINGS</button>
+    </div>
+    <div id="theme-picker">
+      <span>THEME:</span>
+      <button class="theme-opt active" data-theme="industrial">Industrial</button>
+      <button class="theme-opt" data-theme="chicken">Chickens</button>
+      <button class="theme-opt" data-theme="unicorn">Unicorns</button>
+      <button class="theme-opt" data-theme="auto">Auto-detect</button>
+    </div>
+    <div id="char-picker">
+      <span>CONDUIT:</span>
+      <button class="char-opt" data-char="female"><img src="./assets/chars/female.webp" alt="Female"/><em>Female</em></button>
+      <button class="char-opt" data-char="male"><img src="./assets/chars/male.webp" alt="Male"/><em>Male</em></button>
+      <button class="char-opt active" data-char="nogender"><img src="./assets/chars/nogender.webp" alt="No gender"/><em>No gender</em></button>
+    </div>
+    <div id="buffer-picker">
+      <span>REACTION BUFFER:</span>
+      <input id="buffer-slider" type="range" min="1.0" max="15.0" step="0.1" value="6.0" />
+      <span id="buffer-value">6.0s</span>
+      <em>more time to read incoming objects (music + visuals unchanged)</em>
+    </div>
+    <div id="tribute-credit">For Far. One blood, one love, one tribe.</div>
+    <div id="controls-hint">
+      <span class="ch"><b>Mouse/Click</b> aim & fire · shoot to the beat · <b>SPACE</b> drop</span>
+      <span class="ch"><b>🎮 Pad</b> L-stick aim · <b>R2/A</b> fire · <b>X/□</b> drop · <b>L1</b> dodge · <b>Options</b> pause</span>
+    </div>
+    <button id="demucs-btn" class="hidden">⚙ ENABLE REAL KICK (Demucs)</button>
+  </div>
+
+  <div id="screen-local-loops" class="screen hidden">
+    <div class="forge-title">LOCAL LOOPS</div>
+    <div class="forge-sub">Select an auto-imported loop to play</div>
+    <div id="local-loops-list" style="display:flex; flex-direction:column; gap:8px; width:min(90vw, 600px); max-height: 60vh; overflow-y:auto; padding-right:10px; margin-top:20px; text-align:left;">
+      <!-- Populated dynamically -->
+    </div>
+    <button class="btn" style="margin-top:20px; width:min(90vw, 600px);" data-action="to-title">BACK TO MENU</button>
+  </div>
+
+  <div id="screen-settings" class="screen hidden">
+    <div class="forge-title">SETTINGS</div>
+    <div class="menu">
+      <div id="settings-reinforce" style="display:flex; flex-direction:column; gap:8px; margin-bottom: 20px; align-items:center;">
+        <span style="font-size: 14px; letter-spacing: 2px;">KICK REINFORCEMENT:</span>
+        <input id="settings-kick-slider" type="range" min="0" max="1" step="0.05" value="0" style="width: 100%; accent-color: var(--cyan); cursor: pointer;" />
+        <span style="font-size: 11px; opacity: 0.7; text-align:center;">Extra synthesized kick on top of the track — OFF by default. It follows the track's beatgrid and goes quiet in breakdowns.</span>
+      </div>
+      <button class="btn" data-action="to-title">BACK TO MENU</button>
+    </div>
+  </div>
+
+  <div id="screen-forge" class="screen hidden">
+    <div class="forge-title">FORGING TRACK</div>
+    <div class="forge-sub" id="forge-genre">hardtechno · 150 BPM</div>
+    <div id="forge-spinner"></div>
+    <div class="forge-status" id="forge-status">summoning the kick…</div>
+  </div>
+
+  <div id="screen-results" class="screen hidden">
+    <div id="result-rank">S</div>
+    <div id="result-stats"></div>
+    <div class="menu">
+      <button class="btn primary" data-action="retry">ONE MORE</button>
+      <button class="btn" data-action="save-video">SAVE VIDEO (4K/60)</button>
+      <button class="btn" data-action="save-audio">SAVE AUDIO (lossless)</button>
+      <button class="btn" data-action="share">SHARE…</button>
+      <button class="btn" data-action="to-title">MENU</button>
+    </div>
+    <div id="ownership-note">Your run, your track — yours to keep, post & monetize.</div>
+  </div>
+
+  <input id="file-import" type="file" accept="audio/*" class="hidden" />
+
+  <div id="screen-jukebox" class="screen hidden">
+    <div id="jb-title">GITATO RADIO</div>
+    <div id="jb-now">
+      <div id="jb-genre">—</div>
+      <div id="jb-bpm">— BPM</div>
+      <div id="jb-viz"><span></span><span></span><span></span><span></span><span></span></div>
+    </div>
+    <div id="jb-sliders">
+      <label>HARDNESS <input type="range" min="0" max="100" value="60" data-vibe="hardness"></label>
+      <label>SPEED <input type="range" min="0" max="100" value="60" data-vibe="speed"></label>
+      <label>DARKNESS <input type="range" min="0" max="100" value="50" data-vibe="darkness"></label>
+      <label>BOUNCE <input type="range" min="0" max="100" value="60" data-vibe="bounce"></label>
+      <label>PSYCHEDELIC <input type="range" min="0" max="100" value="30" data-vibe="psy"></label>
+    </div>
+    <div id="jb-controls">
+      <button class="jb-btn" data-jb="dislike" title="Dislike">👎</button>
+      <button class="jb-btn" data-jb="like" title="Like">👍</button>
+      <button class="jb-btn big" data-jb="skip" title="Skip">⏭</button>
+      <button class="jb-btn" data-jb="save" title="Save audio">💾</button>
+      <button class="jb-btn" data-jb="share" title="Share">↗</button>
+    </div>
+    <div id="jb-learn">learning your taste · <span id="jb-conf">0%</span> · top: <span id="jb-top">—</span></div>
+    <button class="btn" data-jb="stop" style="width:min(86vw,420px)">BACK TO MENU</button>
+  </div>
+  <script defer src="./app.bundle.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
