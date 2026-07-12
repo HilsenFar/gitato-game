@@ -22431,6 +22431,7 @@ void main() {
   ];
   var Hud = class {
     constructor() {
+      this._comboBase = matchMedia("(max-width: 640px)").matches ? 34 : 52;
       this.el = {
         hud: document.getElementById("hud"),
         comboX: document.getElementById("combo-x"),
@@ -22453,7 +22454,7 @@ void main() {
       for (const t of TIERS) if (combo >= t.min) tier = t;
       this.el.comboX.style.color = tier.color;
       this.el.comboX.style.textShadow = `0 0 ${18 + Math.min(combo, 40)}px ${tier.color}`;
-      this.el.comboX.style.fontSize = 52 + Math.min(combo, 40) * 1.1 + "px";
+      this.el.comboX.style.fontSize = this._comboBase + Math.min(combo, 40) * (this._comboBase / 52) * 1.1 + "px";
       this.el.score.textContent = score.toLocaleString();
       this.el.energy.style.height = Math.max(0, energy * 100) + "%";
       this.el.drop.style.height = drop * 100 + "%";
@@ -23621,25 +23622,37 @@ void main() {
   }
   pollGamepadMenu();
   var mouse = { x: 0, y: 0 };
-  addEventListener("mousemove", (e) => {
-    mouse.x = e.clientX / innerWidth * 2 - 1;
-    mouse.y = -(e.clientY / innerHeight * 2 - 1);
+  var IS_TOUCH = matchMedia("(pointer: coarse)").matches;
+  function aimAt(clientX, clientY) {
+    mouse.x = clientX / innerWidth * 2 - 1;
+    mouse.y = -(clientY / innerHeight * 2 - 1);
     const ret = document.getElementById("reticle");
-    ret.style.left = e.clientX + "px";
-    ret.style.top = e.clientY + "px";
-  });
-  addEventListener("mousedown", (e) => {
+    ret.style.left = clientX + "px";
+    ret.style.top = clientY + "px";
+  }
+  addEventListener("pointermove", (e) => aimAt(e.clientX, e.clientY));
+  addEventListener("pointerdown", (e) => {
     if (!state.running || e.button !== 0) return;
+    if (e.target.closest && e.target.closest("button")) return;
+    aimAt(e.clientX, e.clientY);
     document.getElementById("reticle").classList.add("charging");
     state.game.startCharge();
     state.recorder.logInput("charge", {});
   });
-  addEventListener("mouseup", (e) => {
+  addEventListener("pointerup", (e) => {
     if (!state.running || e.button !== 0) return;
     document.getElementById("reticle").classList.remove("charging");
     state.game.releaseFire();
     state.recorder.logInput("release", {});
   });
+  addEventListener("pointercancel", () => {
+    if (!state.running) return;
+    document.getElementById("reticle").classList.remove("charging");
+    state.game.releaseFire();
+  });
+  document.addEventListener("touchmove", (e) => {
+    if (state.running) e.preventDefault();
+  }, { passive: false });
   addEventListener("keydown", (e) => {
     if (!state.running) return;
     if (e.code === "Space") {
@@ -23649,6 +23662,16 @@ void main() {
     if (e.code === "Escape") {
     }
   });
+  var dropBtn = document.getElementById("drop-btn");
+  if (dropBtn) {
+    dropBtn.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      if (state.running && state.game) {
+        state.game.triggerDrop();
+        state.recorder.logInput("drop", {});
+      }
+    });
+  }
   function paintTick() {
     if (state.running && state.game && state.game.charging) {
       document.getElementById("reticle").classList.add("charging");
@@ -23659,6 +23682,11 @@ void main() {
   paintTick();
   var reticleObserver = setInterval(() => {
     document.getElementById("reticle").classList.toggle("hidden", !state.running);
+    const db = document.getElementById("drop-btn");
+    if (db) {
+      db.classList.toggle("hidden", !(IS_TOUCH && state.running));
+      db.classList.toggle("ready", !!(state.game && state.game.drop >= 1 && !state.game.dropActive));
+    }
   }, 200);
   boot();
   window.__GITATO__ = { state, GenMusic, KickLayer, AudioClock, analyzeFile, GENRES };

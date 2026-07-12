@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>GITATO – HilsenFar</title>
   <meta name="description" content="REZ-style on-rails rhythm flyer for the hard-electronic underground. Play in your browser." />
   <meta name="theme-color" content="#04060a" />
@@ -44,6 +44,8 @@
 
   <!-- Reticle -->
   <div id="reticle" class="hidden"></div>
+  <!-- Touch DROP button (coarse pointers only; lights up when the meter is full) -->
+  <button id="drop-btn" class="hidden">DROP</button>
   <!-- In-game cockpit avatar (chosen Conduit) -->
   <img id="cockpit-avatar" class="hidden" alt="" />
 
@@ -80,8 +82,9 @@
     </div>
     <div id="tribute-credit">For Far. One blood, one love, one tribe.</div>
     <div id="controls-hint">
-      <span class="ch"><b>Mouse/Click</b> aim & fire · shoot to the beat · <b>SPACE</b> drop</span>
-      <span class="ch"><b>🎮 Pad</b> L-stick aim · <b>R2/A</b> fire · <b>X/□</b> drop · <b>L1</b> dodge · <b>Options</b> pause</span>
+      <span class="ch pointer-fine"><b>Mouse/Click</b> aim & fire · shoot to the beat · <b>SPACE</b> drop</span>
+      <span class="ch pointer-fine"><b>🎮 Pad</b> L-stick aim · <b>R2/A</b> fire · <b>X/□</b> drop · <b>L1</b> dodge · <b>Options</b> pause</span>
+      <span class="ch pointer-coarse"><b>👆 Touch</b> hold & drag to paint targets · release to fire · tap <b>DROP</b> when it glows</span>
     </div>
     <button id="demucs-btn" class="hidden">⚙ ENABLE REAL KICK (Demucs)</button>
   </div>
