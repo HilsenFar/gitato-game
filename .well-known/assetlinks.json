@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "net.gitato.game",
+    "sha256_cert_fingerprints": ["CB:B3:DF:D9:67:36:24:A1:0E:F4:AE:88:F8:A0:49:B4:C9:4E:3C:CD:B1:C5:9B:21:A1:68:04:5A:F8:6E:78:D0"]
+  }
+}]
