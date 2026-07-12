@@ -23009,6 +23009,7 @@ void main() {
     recorder: null,
     texMap: {},
     running: false,
+    paused: false,
     mode: "ascend",
     theme: "industrial",
     lastBlob: null,
@@ -23170,13 +23171,79 @@ void main() {
     if (a === "settings") return showScreen("screen-settings");
     if (a === "retry") return startForge(state.mode);
     if (a === "to-title") {
+      if (state.paused) {
+        showScreen("screen-pause");
+        return;
+      }
       showScreen("screen-title");
       state.hud.show(false);
+      return;
+    }
+    if (a === "resume") return resumeRun();
+    if (a === "restart") {
+      await quitRun(true);
+      return startForge(state.mode, state._lastPractice);
+    }
+    if (a === "pause-settings") return showScreen("screen-settings");
+    if (a === "quit-run") {
+      await quitRun(false);
+      showScreen("screen-title");
+      state.hud.show(false);
+      requestAnimationFrame(idleLoop);
       return;
     }
     if (a === "save-video") return saveVideo();
     if (a === "save-audio") return saveAudio();
     if (a === "share") return share();
+  }
+  function pauseRun() {
+    if (!state.running || state.paused) return;
+    state.paused = true;
+    state.running = false;
+    cancelAnimationFrame(state.raf);
+    state.clock.ctx.suspend();
+    try {
+      state.recorder.rec && state.recorder.rec.state === "recording" && state.recorder.rec.pause();
+    } catch (e) {
+    }
+    showScreen("screen-pause");
+  }
+  function resumeRun() {
+    if (!state.paused) return;
+    state.paused = false;
+    showScreen(null);
+    state.clock.ctx.resume();
+    try {
+      state.recorder.rec && state.recorder.rec.state === "paused" && state.recorder.rec.resume();
+    } catch (e) {
+    }
+    state.running = true;
+    state.lastT = performance.now();
+    cancelAnimationFrame(state.raf);
+    gameLoop();
+  }
+  async function quitRun(keepForRestart) {
+    state.paused = false;
+    state.running = false;
+    cancelAnimationFrame(state.raf);
+    await state.clock.ctx.resume();
+    try {
+      state._musicSrc && state._musicSrc.stop();
+    } catch (e) {
+    }
+    state.gen.stop();
+    state.kick && state.kick.stop();
+    try {
+      await state.recorder.stopCapture();
+    } catch (e) {
+    }
+    state.hud.rec(false);
+    document.getElementById("cockpit-avatar").classList.add("hidden");
+    if (!keepForRestart) state.hud.show(false);
+  }
+  function togglePause() {
+    if (state.paused) resumeRun();
+    else if (state.running) pauseRun();
   }
   var BUNDLED_TRACKS = {
     hardstyle: { file: "tracks/hardstyle_150.m4a", bpm: 150, theme: "industrial" },
@@ -23458,7 +23525,10 @@ void main() {
       });
     }
     state.running = true;
+    state.paused = false;
     state.lastT = performance.now();
+    state._lastPractice = !!practice;
+    history.pushState({ gitatoRun: true }, "");
     cancelAnimationFrame(state.raf);
     gameLoop();
   }
@@ -23596,6 +23666,7 @@ void main() {
       gp.rumble(0.9, 0.6, 200);
     }
     if (s.pause) {
+      pauseRun();
     }
   }
   function showPadToast(id) {
@@ -23618,6 +23689,11 @@ void main() {
     if (gp && !state.running) {
       const s = gp.poll();
       if (s) {
+        if (s.pause && state.paused) {
+          resumeRun();
+          requestAnimationFrame(pollGamepadMenu);
+          return;
+        }
         const menu = document.querySelector(".screen:not(.hidden)");
         if (menu) {
           const btns = [...menu.querySelectorAll("button:not(.hidden)")];
@@ -23682,12 +23758,22 @@ void main() {
     if (state.running) e.preventDefault();
   }, { passive: false });
   addEventListener("keydown", (e) => {
+    if (e.code === "Escape") {
+      togglePause();
+      return;
+    }
     if (!state.running) return;
     if (e.code === "Space") {
       state.game.triggerDrop();
       state.recorder.logInput("drop", {});
     }
-    if (e.code === "Escape") {
+  });
+  addEventListener("popstate", () => {
+    if (state.running && !state.paused) {
+      pauseRun();
+      history.pushState({ gitatoRun: true }, "");
+    } else if (state.paused) {
+      handleAction("quit-run");
     }
   });
   var dropBtn = document.getElementById("drop-btn");
