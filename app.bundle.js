@@ -20252,7 +20252,8 @@ void main() {
     _distCurves.set(amount, c);
     return c;
   }
-  function synthKick(ctx, dest, t, r, vel = 1, level = 1) {
+  function synthKick(ctx, dest, t, r, vel = 1, level = 1, opts = {}) {
+    const tailGain = opts.tailGain != null ? opts.tailGain : 0.35;
     const nodes = [];
     const amp = ctx.createGain();
     amp.gain.setValueAtTime(1e-4, t);
@@ -20273,14 +20274,14 @@ void main() {
     const endHz = r.type === "french" ? 48 : r.type === "o909" ? 50 : 42;
     osc.frequency.setValueAtTime(startHz, t);
     osc.frequency.exponentialRampToValueAtTime(endHz, t + (r.type === "french" ? 0.1 : 0.055));
-    if (r.type === "scream" || r.type === "saw909") {
+    if ((r.type === "scream" || r.type === "saw909") && tailGain > 1e-3) {
       const tail = ctx.createOscillator();
       tail.type = "sawtooth";
       tail.frequency.setValueAtTime(endHz * 2, t + 0.04);
       tail.frequency.exponentialRampToValueAtTime(endHz * 3.2, t + r.tailMs / 1e3);
       const tg = ctx.createGain();
       tg.gain.setValueAtTime(1e-4, t + 0.04);
-      tg.gain.exponentialRampToValueAtTime(0.35 * vel, t + 0.06);
+      tg.gain.exponentialRampToValueAtTime(tailGain * vel, t + 0.06);
       tg.gain.exponentialRampToValueAtTime(1e-4, t + r.tailMs / 1e3);
       tail.connect(tg);
       tg.connect(shaper);
@@ -20818,7 +20819,8 @@ void main() {
       switch (e.type) {
         case "kick": {
           const r = KICK_RECIPE[this.genre] || KICK_RECIPE.hardcore;
-          const { nodes } = synthKick(this.ctx, G.kick, t, r, e.vel, 1);
+          const tailGain = r.type === "saw909" ? 0 : r.type === "scream" ? 0.15 : void 0;
+          const { nodes } = synthKick(this.ctx, G.kick, t, r, e.vel, 1, { tailGain });
           this.scheduledNodes.push(...nodes);
           const spb = 60 / this.bpm * inv;
           const dg = G.duck.gain;
@@ -22177,6 +22179,10 @@ void main() {
     }
     start(map, themeBias) {
       this.reset();
+      for (const child of [...this.scene.enemyGroup.children]) {
+        this.scene.enemyGroup.remove(child);
+        child.material?.dispose?.();
+      }
       this.map = map;
       this.notesTotal = map.notes.filter((n) => n.kind !== "kick").length;
       this.scoreMax = Math.max(1, this.notesTotal * 100);
