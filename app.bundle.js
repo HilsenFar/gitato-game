@@ -22385,6 +22385,11 @@ void main() {
       this.clock = clock;
       this.ctx = clock.ctx;
       this.out = clock.sfxGain;
+      this.hitSounds = localStorage.getItem("gitato.hitsounds") !== "0";
+    }
+    setHitSounds(on) {
+      this.hitSounds = !!on;
+      localStorage.setItem("gitato.hitsounds", on ? "1" : "0");
     }
     _blip(freq, dur, type = "sine", gain = 0.3, slideTo = null) {
       const t = this.ctx.currentTime;
@@ -22402,9 +22407,11 @@ void main() {
       o.stop(t + dur + 0.02);
     }
     lock(n) {
+      if (!this.hitSounds) return;
       this._blip(500 + n * 90, 0.05, "square", 0.12);
     }
     hit(j, combo, themeKind, oneShotTheme) {
+      if (!this.hitSounds) return;
       if (j === "perfect") this._blip(880 + Math.min(combo, 40) * 12, 0.12, "sine", 0.3, 1760);
       else if (j === "good") this._blip(660, 0.1, "triangle", 0.22);
       else this._blip(440, 0.08, "triangle", 0.16);
@@ -23121,14 +23128,29 @@ void main() {
   }
   function wireSettings() {
     const kickSlider = document.getElementById("settings-kick-slider");
-    if (!kickSlider) return;
-    const saved = parseFloat(localStorage.getItem("gitato.reinforce2") || "0");
-    kickSlider.value = String(saved);
-    kickSlider.addEventListener("input", () => {
-      const v = parseFloat(kickSlider.value);
-      localStorage.setItem("gitato.reinforce2", String(v));
-      if (state.kick) state.kick.setAmount(v);
-    });
+    if (kickSlider) {
+      const saved = parseFloat(localStorage.getItem("gitato.reinforce2") || "0");
+      kickSlider.value = String(saved);
+      kickSlider.addEventListener("input", () => {
+        const v = parseFloat(kickSlider.value);
+        localStorage.setItem("gitato.reinforce2", String(v));
+        if (state.kick) state.kick.setAmount(v);
+      });
+    }
+    const hs = document.getElementById("settings-hitsound-btn");
+    if (hs) {
+      const label = () => {
+        const on = localStorage.getItem("gitato.hitsounds") !== "0";
+        hs.innerHTML = `HIT SOUNDS: ${on ? "ON" : "OFF"} <span>the little blips when you lock &amp; hit targets</span>`;
+      };
+      label();
+      hs.addEventListener("click", () => {
+        const on = localStorage.getItem("gitato.hitsounds") !== "0";
+        localStorage.setItem("gitato.hitsounds", on ? "0" : "1");
+        if (state.sfx) state.sfx.setHitSounds(!on);
+        label();
+      });
+    }
   }
   function showScreen(id) {
     document.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
@@ -23695,6 +23717,9 @@ void main() {
     }
   }, 200);
   boot();
+  if (document.referrer.startsWith("android-app://")) {
+    document.getElementById("apk-link")?.classList.add("hidden");
+  }
   window.__GITATO__ = { state, GenMusic, KickLayer, AudioClock, analyzeFile, GENRES };
 })();
 /*! Bundled license information:
