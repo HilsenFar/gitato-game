@@ -23414,7 +23414,14 @@ void main() {
       if (bt) {
         try {
           const url = ASSETS + bt.file;
-          const ab = await (await fetch(url)).arrayBuffer();
+          // flaky mobile networks: a stalled track download used to freeze the
+          // forge screen forever — cap it at 10 s, then the catch below falls
+          // through to the procedural engine so a run ALWAYS starts
+          const ctrl = new AbortController();
+          const tId = setTimeout(() => ctrl.abort(), 1e4);
+          const resp = await fetch(url, { signal: ctrl.signal });
+          const ab = await resp.arrayBuffer();
+          clearTimeout(tId);
           const audioBuf = await state.clock.ctx.decodeAudioData(ab.slice(0));
           const a = await analyzeFile(audioBuf);
           map = a.map;
