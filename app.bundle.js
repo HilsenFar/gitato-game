@@ -20458,28 +20458,64 @@ void main() {
   };
 
   // renderer/js/engine/gen-music.js
+  //
+  // Sound engine v3 — every genre carries its own musical identity, so no two
+  // genres compose the same track anymore:
+  //   kickPat — kick-drum pattern archetype        chords  — harmonic loop (scale degrees)
+  //   plan    — arrangement archetype               riffTpl — 16-step melodic fingerprint
+  //   riffOct — octave-jump probability             riffDbl — gallop velocity alternation
+  //   snareOn — backbeat snare beats                energy  — mix emphasis {lead,bass,hats}
+  // Any field left out falls back to the old v2 behaviour.
   var GENRES = {
-    hardstyle: { bpm: 150, themeBias: "industrial", screech: 0.5, bass: "offbeat", lead: "supersaw", hats: "offbeat", clap: true },
-    classichardstyle: { bpm: 145, themeBias: "industrial", screech: 0.4, bass: "offbeat", lead: "hoover", hats: "offbeat", clap: true },
-    rawstyle: { bpm: 155, themeBias: "industrial", screech: 0.8, bass: "roll", lead: "screech", hats: "offbeat", clap: true },
-    hardcore: { bpm: 165, themeBias: "industrial", screech: 0.6, bass: "none", lead: "hoover", hats: "sixteenth", clap: true },
-    gabber: { bpm: 175, themeBias: "industrial", screech: 0.4, bass: "none", lead: "hoover", hats: "offbeat", clap: false },
-    industrialhardcore: { bpm: 185, themeBias: "industrial", screech: 0.5, bass: "none", lead: "screech", hats: "sixteenth", clap: false },
-    terror: { bpm: 220, themeBias: "industrial", screech: 0.6, bass: "none", lead: "screech", hats: "sixteenth", clap: false },
-    crossbreed: { bpm: 180, themeBias: "industrial", screech: 0.5, bass: "roll", lead: "screech", hats: "sixteenth", clap: true },
-    doomcore: { bpm: 140, themeBias: "cosmic", screech: 0.2, bass: "sub", lead: "pluck", hats: "offbeat", clap: false },
-    uptempo: { bpm: 190, themeBias: "chicken", screech: 0.5, bass: "none", lead: "screech", hats: "sixteenth", clap: false },
-    zaag: { bpm: 175, themeBias: "unicorn", screech: 0.9, bass: "roll", lead: "screech", hats: "offbeat", clap: false },
-    frenchcore: { bpm: 200, themeBias: "chicken", screech: 0.4, bass: "none", lead: "supersaw", hats: "offbeat", clap: true },
-    tribe: { bpm: 155, themeBias: "unicorn", screech: 0.6, bass: "roll", lead: "pluck", hats: "offbeat", clap: false },
-    hardtek: { bpm: 175, themeBias: "unicorn", screech: 0.6, bass: "roll", lead: "pluck", hats: "offbeat", clap: false },
-    raggatek: { bpm: 185, themeBias: "chicken", screech: 0.5, bass: "roll", lead: "pluck", hats: "offbeat", clap: true },
-    hardtechno: { bpm: 150, themeBias: "industrial", screech: 0.4, bass: "sub", lead: "acid", hats: "ride", clap: false },
-    industrialtechno: { bpm: 135, themeBias: "cosmic", screech: 0.3, bass: "sub", lead: "acid", hats: "ride", clap: false },
-    psytrance: { bpm: 180, themeBias: "cosmic", screech: 0.3, bass: "psy", lead: "pluck", hats: "offbeat", clap: false },
-    psychedelic: { bpm: 145, themeBias: "cosmic", screech: 0.3, bass: "psy", lead: "pluck", hats: "offbeat", clap: false },
-    forestpsy: { bpm: 155, themeBias: "cosmic", screech: 0.3, bass: "psy", lead: "pluck", hats: "offbeat", clap: false }
+    hardstyle: { bpm: 150, themeBias: "industrial", screech: 0.5, bass: "offbeat", lead: "supersaw", hats: "offbeat", clap: true, chords: [0, 5, 3, 4], plan: "standard", energy: { lead: 1.05, bass: 1, hats: 1 } },
+    classichardstyle: { bpm: 145, themeBias: "industrial", screech: 0.4, bass: "offbeat", lead: "hoover", hats: "offbeat", clap: true, chords: [0, 5, 3, 4], plan: "standard", riffOct: 0.1 },
+    rawstyle: { bpm: 155, themeBias: "industrial", screech: 0.8, bass: "roll", lead: "screech", hats: "offbeat", clap: true, chords: [0, 0, 5, 6], plan: "standard", energy: { lead: 1.1, bass: 1.1, hats: 0.9 } },
+    hardcore: { bpm: 165, themeBias: "industrial", screech: 0.6, bass: "none", lead: "hoover", hats: "sixteenth", clap: true, chords: [0, 1, 0, 6], plan: "standard" },
+    gabber: { bpm: 175, themeBias: "industrial", screech: 0.4, bass: "none", lead: "hoover", hats: "offbeat", clap: false, chords: [0, 1, 0, 6], plan: "raw", energy: { lead: 0.85, bass: 1, hats: 1 } },
+    industrialhardcore: { bpm: 185, themeBias: "industrial", screech: 0.5, bass: "none", lead: "screech", hats: "sixteenth", clap: false, chords: [0, 1, 0, 1], plan: "raw", riffTpl: [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0], energy: { lead: 1.15, bass: 1, hats: 0.8 } },
+    terror: { bpm: 220, themeBias: "industrial", screech: 0.6, bass: "none", lead: "screech", hats: "sixteenth", clap: false, kickPat: "uptempo", chords: [0, 1, 0, 1], plan: "raw", riffTpl: [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0] },
+    crossbreed: { bpm: 180, themeBias: "industrial", screech: 0.5, bass: "roll", lead: "screech", hats: "sixteenth", clap: true, kickPat: "brokenstomp", chords: [0, 6, 1, 5], plan: "standard" },
+    doomcore: { bpm: 140, themeBias: "cosmic", screech: 0.2, bass: "sub", lead: "pluck", hats: "offbeat", clap: false, kickPat: "halfdoom", chords: [0, 1, 6, 1], plan: "doom", riffTpl: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0], riffOct: 0, energy: { lead: 0.9, bass: 1.15, hats: 0.6 } },
+    uptempo: { bpm: 190, themeBias: "chicken", screech: 0.5, bass: "none", lead: "screech", hats: "sixteenth", clap: false, kickPat: "uptempo", chords: [0, 0, 6, 5], plan: "raw" },
+    zaag: { bpm: 175, themeBias: "unicorn", screech: 0.9, bass: "roll", lead: "screech", hats: "offbeat", clap: false, chords: [0, 5, 0, 6], plan: "standard", riffTpl: [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], riffOct: 0.05, energy: { lead: 1.2, bass: 1.15, hats: 0.8 } },
+    frenchcore: { bpm: 200, themeBias: "chicken", screech: 0.4, bass: "gallop", lead: "supersaw", hats: "offbeat", clap: true, chords: [0, 3, 4, 5], plan: "standard", riffOct: 0.25, energy: { lead: 1.1, bass: 1.05, hats: 1 } },
+    tribe: { bpm: 155, themeBias: "unicorn", screech: 0.6, bass: "roll", lead: "pluck", hats: "offbeat", clap: false, kickPat: "fourghost", chords: [0, 2, 0, 5], plan: "standard" },
+    hardtek: { bpm: 175, themeBias: "unicorn", screech: 0.6, bass: "roll", lead: "pluck", hats: "offbeat", clap: false, kickPat: "fourghost", chords: [0, 2, 0, 5], plan: "standard", riffTpl: [1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0], riffOct: 0.3 },
+    raggatek: { bpm: 185, themeBias: "chicken", screech: 0.5, bass: "roll", lead: "pluck", hats: "offbeat", clap: false, kickPat: "fourghost", snareOn: [3], chords: [0, 2, 0, 5], plan: "standard", riffTpl: [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0], riffOct: 0.22 },
+    hardtechno: { bpm: 150, themeBias: "industrial", screech: 0.4, bass: "sub", lead: "acid", hats: "ride", clap: false, chords: [0, 0, 0, 0], plan: "hypnotic" },
+    industrialtechno: { bpm: 135, themeBias: "cosmic", screech: 0.3, bass: "sub", lead: "acid", hats: "ride", clap: false, chords: [0, 0, 1, 0], plan: "hypnotic", riffTpl: [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0], riffOct: 0.05, energy: { lead: 0.9, bass: 1.2, hats: 0.75 } },
+    psytrance: { bpm: 180, themeBias: "cosmic", screech: 0.3, bass: "psy", lead: "pluck", hats: "offbeat", clap: false, chords: [0, 0, 0, 0], plan: "hypnotic", riffDbl: true, riffOct: 0.35, energy: { lead: 1.1, bass: 1.05, hats: 0.9 } },
+    psychedelic: { bpm: 145, themeBias: "cosmic", screech: 0.3, bass: "psy", lead: "pluck", hats: "offbeat", clap: false, chords: [0, 0, 0, 0], plan: "hypnotic", riffTpl: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0], riffOct: 0.45, energy: { lead: 1.05, bass: 1, hats: 0.8 } },
+    forestpsy: { bpm: 155, themeBias: "cosmic", screech: 0.3, bass: "psy", lead: "pluck", hats: "offbeat", clap: false, chords: [0, 1, 0, 0], plan: "hypnotic", riffTpl: [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0], riffOct: 0.2, energy: { lead: 0.95, bass: 1.1, hats: 0.7 } }
   };
+  var GENRE_PLANS = {
+    standard: [{ name: "intro", bars: 8 }, { name: "build", bars: 8 }, { name: "drop1", bars: 16, drop: true }, { name: "break", bars: 8 }, { name: "drop2", bars: 16, drop: true }, { name: "outro", bars: 8 }],
+    hypnotic: [{ name: "intro", bars: 4 }, { name: "build", bars: 12 }, { name: "drop1", bars: 20, drop: true }, { name: "break", bars: 6 }, { name: "drop2", bars: 18, drop: true }, { name: "outro", bars: 4 }],
+    raw: [{ name: "intro", bars: 2 }, { name: "build", bars: 6 }, { name: "drop1", bars: 20, drop: true }, { name: "break", bars: 6 }, { name: "drop2", bars: 20, drop: true }, { name: "outro", bars: 2 }],
+    doom: [{ name: "intro", bars: 8 }, { name: "build", bars: 8 }, { name: "drop1", bars: 12, drop: true }, { name: "break", bars: 12 }, { name: "drop2", bars: 12, drop: true }, { name: "outro", bars: 8 }]
+  };
+  // Kick pattern per bar: list of { b: beat position, v: velocity mult }.
+  // Only hits with v >= 0.8 become gameplay targets (ghosts stay musical).
+  function kickBeatsFor(pat, barNo, isDrop) {
+    switch (pat) {
+      case "halfdoom":
+        return [{ b: 0, v: 1.15 }, { b: 2, v: 1.05 }];
+      case "uptempo": {
+        const arr = [{ b: 0, v: 1 }, { b: 1, v: 1 }, { b: 2, v: 1 }, { b: 3, v: 1 }];
+        if (isDrop && barNo % 2 === 1) arr.push({ b: 3.5, v: 0.85 });
+        return arr;
+      }
+      case "brokenstomp":
+        return barNo % 2 === 0 ? [{ b: 0, v: 1 }, { b: 1, v: 1 }, { b: 2, v: 1 }, { b: 3, v: 1 }] : [{ b: 0, v: 1 }, { b: 1.5, v: 0.9 }, { b: 2, v: 1 }, { b: 3.5, v: 0.9 }];
+      case "fourghost": {
+        const arr = [{ b: 0, v: 1 }, { b: 1, v: 1 }, { b: 2, v: 1 }, { b: 3, v: 1 }];
+        if (isDrop) arr.push({ b: 2.75, v: 0.35 });
+        return arr;
+      }
+      default:
+        return [{ b: 0, v: 1 }, { b: 1, v: 1 }, { b: 2, v: 1 }, { b: 3, v: 1 }];
+    }
+  }
   function mulberry32(seed) {
     return function() {
       seed |= 0;
@@ -20509,7 +20545,7 @@ void main() {
     // Build a full arrangement (internal synth events + gameplay reaction-map).
     // Returns { map, durationSec, seed, genre, themeBias, bpm }.
     // The arrangement is structurally fixed at 64 bars (intro/build/drop/break/drop/outro).
-    compose(genre = "hardstyle", seed = Math.random() * 1e9 | 0) {
+    compose(genre = "hardstyle", seed = Math.random() * 1e9 | 0, opts = {}) {
       this.seed = seed;
       this.rng = mulberry32(seed);
       this.genre = genre;
@@ -20523,20 +20559,19 @@ void main() {
       const scale = dark ? PHRYGIAN : MINOR;
       const root = 45 + Math.floor(rng() * 6);
       this.key = { root, scale };
-      const riff = this._makeRiff(g.lead, scale, rng);
-      const riffAlt = this._makeRiff(g.lead, scale, rng);
+      const riff = this._makeRiff(g, scale, rng);
+      const riffAlt = this._makeRiff(g, scale, rng);
+      const eLead = g.energy && g.energy.lead || 1;
+      const eBass = g.energy && g.energy.bass || 1;
+      const eHats = g.energy && g.energy.hats || 1;
       const ev = [];
       const notes = [];
       const drops = [], sections = [];
-      const plan = [
-        { name: "intro", bars: 8 },
-        { name: "build", bars: 8 },
-        { name: "drop1", bars: 16, drop: true },
-        { name: "break", bars: 8 },
-        { name: "drop2", bars: 16, drop: true },
-        { name: "outro", bars: 8 }
-      ];
-      const chordDegrees = [0, 5, 2, 6];
+      const plan = (GENRE_PLANS[g.plan] || GENRE_PLANS.standard).map((s) => ({ ...s }));
+      if (opts.plan === "radio") {
+        for (const s of plan) s.bars = Math.max(2, Math.round(s.bars * 0.55));
+      }
+      const chordDegrees = g.chords || [0, 5, 2, 6];
       const tone = (d) => root + scale[d % scale.length] + Math.floor(d / scale.length) * 12;
       let barIdx = 0;
       for (const sec of plan) {
@@ -20549,26 +20584,25 @@ void main() {
         for (let b = 0; b < sec.bars; b++) {
           const bt = (barIdx + b) * bar;
           const isDrop = !!sec.drop;
-          const chordDeg = chordDegrees[(barIdx + b >> 1) % 4];
+          const chordDeg = chordDegrees[(barIdx + b >> 1) % chordDegrees.length];
           const chordRoot = tone(chordDeg) + (chordDeg >= 5 ? -12 : 0);
+          const emitKicks = (vel) => {
+            for (const k of kickBeatsFor(g.kickPat, barIdx + b, isDrop)) {
+              const t = bt + k.b * spb;
+              ev.push({ t, type: "kick", vel: vel * k.v });
+              if (k.v >= 0.8) notes.push({ t, band: "bass", kind: "kick" });
+            }
+          };
           if (sec.name !== "intro" && sec.name !== "break") {
             let vel = 1;
             if (sec.name === "build") vel = 0.85;
             if (sec.name === "outro") vel = Math.max(0.35, 1 - b / sec.bars);
-            for (let beat = 0; beat < 4; beat++) {
-              const t = bt + beat * spb;
-              ev.push({ t, type: "kick", vel });
-              notes.push({ t, band: "bass", kind: "kick" });
-            }
+            emitKicks(vel);
           } else if (sec.name === "intro" && b >= sec.bars - 2) {
-            for (let beat = 0; beat < 4; beat++) {
-              const t = bt + beat * spb;
-              ev.push({ t, type: "kick", vel: 0.5 });
-              notes.push({ t, band: "bass", kind: "kick" });
-            }
+            emitKicks(0.5);
           }
           if (isDrop || sec.name === "build" && b >= 2 || sec.name === "outro") {
-            const bvel = sec.name === "outro" ? Math.max(0.3, 1 - b / sec.bars) : isDrop ? 1 : 0.7;
+            const bvel = (sec.name === "outro" ? Math.max(0.3, 1 - b / sec.bars) : isDrop ? 1 : 0.7) * eBass;
             const bf = midiHz(chordRoot - 12);
             if (g.bass === "offbeat") {
               for (let beat = 0; beat < 4; beat++)
@@ -20582,6 +20616,11 @@ void main() {
               for (let beat = 0; beat < 4; beat++)
                 for (let k = 1; k < 4; k++)
                   ev.push({ t: bt + beat * spb + k * spb / 4, type: "bassRoll", f: bf, dur: spb / 4 * 0.8, vel: bvel * 0.9 });
+            } else if (g.bass === "gallop") {
+              for (let beat = 0; beat < 4; beat++) {
+                ev.push({ t: bt + beat * spb + spb / 3, type: "bassRoll", f: bf, dur: spb / 3 * 0.8, vel: bvel * 0.95 });
+                ev.push({ t: bt + beat * spb + spb * 2 / 3, type: "bassRoll", f: bf, dur: spb / 3 * 0.8, vel: bvel * 0.8 });
+              }
             } else if (g.bass === "sub") {
               for (let beat = 0; beat < 4; beat++)
                 ev.push({ t: bt + beat * spb + spb / 2, type: "bassSub", f: bf, dur: spb * 0.45, vel: bvel * 0.9 });
@@ -20592,7 +20631,7 @@ void main() {
             const useAlt = isDrop && b % 8 >= 4;
             const r = useAlt ? riffAlt : riff;
             const cutoff = isDrop ? 3600 : sec.name === "build" ? 1500 : 900;
-            const lvel = isDrop ? 1 : sec.name === "break" ? 0.8 : 0.6;
+            const lvel = (isDrop ? 1 : sec.name === "break" ? 0.8 : 0.6) * eLead;
             const stepDur = spb / 4;
             const stepStride = sec.name === "break" ? 2 : 1;
             for (let s = 0; s < 16; s += stepStride) {
@@ -20608,7 +20647,8 @@ void main() {
                 ev.push({ t, type: "oneshot", theme: g.themeBias });
                 notes.push({ t, band: "high", kind: "oneshot", oneShot: true, theme: g.themeBias });
               } else {
-                ev.push({ t, type: "lead", style: g.lead, f: midiHz(midi), cutoff, dur, vel: lvel, accent: st.accent });
+                const gvel = g.riffDbl && s % 2 ? lvel * 0.72 : lvel;
+                ev.push({ t, type: "lead", style: g.lead, f: midiHz(midi), cutoff, dur, vel: gvel, accent: st.accent });
                 const dense = g.lead === "pluck" || g.lead === "acid";
                 if (!dense || st.accent || s % 2 === 0) {
                   notes.push({ t, band: octUp > 0 ? "high" : "mid", kind: "stab" });
@@ -20623,7 +20663,7 @@ void main() {
             ev.push({ t: bt, type: "pad", fs: cf.map(midiHz), dur: bar * 2 });
           }
           if (sec.name !== "intro" && sec.name !== "break") {
-            const hvel = isDrop ? 1 : 0.6;
+            const hvel = (isDrop ? 1 : 0.6) * eHats;
             if (g.hats === "offbeat" || g.hats === "ride") {
               for (let beat = 0; beat < 4; beat++)
                 ev.push({ t: bt + beat * spb + spb / 2, type: "hat", open: g.hats === "ride", vel: hvel });
@@ -20631,11 +20671,14 @@ void main() {
               for (let s = 0; s < 16; s++)
                 ev.push({ t: bt + s * spb / 4, type: "hat", open: false, vel: hvel * (s % 4 === 2 ? 0.9 : 0.45) });
             }
-            if (g.clap && (isDrop || sec.name === "build"))
+            if (g.snareOn && (isDrop || sec.name === "build")) {
+              for (const beat of g.snareOn) ev.push({ t: bt + beat * spb, type: "snare", vel: isDrop ? 0.9 : 0.6 });
+            } else if (g.clap && (isDrop || sec.name === "build")) {
               for (const beat of [1, 3]) ev.push({ t: bt + beat * spb, type: "clap", vel: isDrop ? 1 : 0.7 });
+            }
           } else if (sec.name === "break") {
             for (let beat = 0; beat < 4; beat++)
-              ev.push({ t: bt + beat * spb + spb / 2, type: "hat", open: false, vel: 0.3 });
+              ev.push({ t: bt + beat * spb + spb / 2, type: "hat", open: false, vel: 0.3 * eHats });
           }
           if (sec.name === "build") {
             if (b === sec.bars - 4) ev.push({ t: bt, type: "riser", dur: bar * 4 });
@@ -20664,8 +20707,10 @@ void main() {
       this.durationSec = durationSec;
       return { map: this.map, durationSec, seed, genre, themeBias: g.themeBias, bpm: g.bpm };
     }
-    // seeded 16-step riff with a musical contour (tension → resolve on the root)
-    _makeRiff(leadStyle, scale, rng) {
+    // seeded 16-step riff with a musical contour (tension → resolve on the root).
+    // v3: the genre can pin its own step template (riffTpl) and octave-jump
+    // probability (riffOct) so each genre keeps a recognizable melodic gait.
+    _makeRiff(g, scale, rng) {
       const templates = {
         supersaw: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1],
         // offbeat 8ths + pickup
@@ -20675,7 +20720,8 @@ void main() {
         pluck: [0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1]
         // psy arp between kicks
       };
-      const tpl = templates[leadStyle] || templates.supersaw;
+      const tpl = g.riffTpl || templates[g.lead] || templates.supersaw;
+      const octP = g.riffOct != null ? g.riffOct : 0.18;
       const degrees = [0, 2, 3, 4, 5, 7];
       const steps = new Array(16).fill(null);
       let cur = 0;
@@ -20685,7 +20731,7 @@ void main() {
         else if (rng() < 0.6) cur = Math.max(0, Math.min(degrees.length - 1, cur + (rng() < 0.5 ? -1 : 1)));
         else cur = Math.floor(rng() * degrees.length);
         const deg = scale[degrees[cur] % scale.length] + (degrees[cur] >= scale.length ? 12 : 0);
-        steps[s] = { deg, oct: rng() < 0.18 ? 1 : 0, accent: s % 4 === 0 || rng() < 0.2 };
+        steps[s] = { deg, oct: rng() < octP ? 1 : 0, accent: s % 4 === 0 || rng() < 0.2 };
       }
       return { steps };
     }
@@ -20824,7 +20870,7 @@ void main() {
           this.scheduledNodes.push(...nodes);
           const spb = 60 / this.bpm * inv;
           const dg = G.duck.gain;
-          dg.setValueAtTime(0.35, t);
+          dg.setValueAtTime(1 - 0.65 * Math.min(1, e.vel != null ? e.vel : 1), t);
           dg.linearRampToValueAtTime(1, t + spb * 0.6);
           break;
         }
@@ -22604,21 +22650,39 @@ void main() {
       Object.assign(this.sliders, s);
     }
     // Score a genre = slider match × learned weight × learned vibe affinity.
+    // v3: the old cubic match was nearly flat across 20 genres (max-slider psy
+    // still only got ~8% of picks). Now: per-vibe weighted distance (psy weighs
+    // heaviest — it defines the branch) through a sharp exponential, so the
+    // sliders actually steer the radio.
     _score(g) {
       const v = GENRE_VIBES[g];
-      let d = 0;
-      for (const k of VIBES) d += Math.abs((this.sliders[k] ?? v[k]) - v[k]);
-      const sliderMatch = Math.pow(Math.max(0.01, 1 - d / VIBES.length), 3);
+      const W = { hardness: 1, speed: 0.8, darkness: 1, bounce: 0.7, psy: 1.6 };
+      let d = 0, wsum = 0;
+      for (const k of VIBES) {
+        d += W[k] * Math.abs((this.sliders[k] ?? v[k]) - v[k]);
+        wsum += W[k];
+      }
+      const sliderMatch = Math.exp(-9 * (d / wsum));
       let aff = 0;
       for (const k of VIBES) aff += this.vibePref[k] * (v[k] - 0.5) * 2;
       const affinity = 1 + Math.max(-0.6, Math.min(0.6, aff));
-      return Math.max(1e-3, sliderMatch) * this.weight[g] * affinity;
+      return Math.max(1e-4, sliderMatch) * this.weight[g] * affinity;
     }
     // Pick the next genre (weighted random over scores, with a little exploration).
-    pick() {
-      const scores = this.genres.map((g) => [g, this._score(g)]);
+    // v3: exploration is rarer (6%) and stays on-vibe (top-8 only); `exclude`
+    // lets skip avoid landing on the very same genre again; `focus` restricts
+    // the draw to the top-N scorers (used by slider retunes, where the user
+    // just told us EXACTLY what vibe they want).
+    pick(exclude = null, focus = 0) {
+      let scores = this.genres.map((g) => [g, this._score(g)]);
+      if (exclude && scores.length > 1) scores = scores.filter(([g]) => g !== exclude);
+      scores.sort((a, b) => b[1] - a[1]);
+      if (focus > 0) scores = scores.slice(0, focus);
+      else if (Math.random() < 0.06) {
+        const top = scores.slice(0, 8);
+        return top[Math.random() * top.length | 0][0];
+      }
       const total = scores.reduce((s, [, w]) => s + w, 0);
-      if (Math.random() < 0.12) return this.genres[Math.random() * this.genres.length | 0];
       let r = Math.random() * total;
       for (const [g, w] of scores) {
         r -= w;
@@ -22671,24 +22735,41 @@ void main() {
   };
 
   // renderer/js/engine/jukebox.js
+  //
+  // v3 — the radio now REACTS: moving a vibe slider retunes to the best-matching
+  // genre within ~0.7s (short crossfade on a private radio bus), skip never
+  // repeats the genre you just skipped, and radio arrangements are cut shorter
+  // so the mix rotates faster.
   var Jukebox = class {
     constructor(clock, taste) {
       this.clock = clock;
       this.taste = taste;
+      this._bus = clock.ctx.createGain();
+      this._bus.gain.value = 1;
+      this._bus.connect(clock.musicGain);
       this.gen = new GenMusic(clock);
+      this.gen.out = this._bus;
       this.playing = false;
       this.current = null;
       this._timer = null;
+      this._retuneT = null;
       this.onTrack = null;
     }
     start() {
       if (this.playing) return;
       this.playing = true;
+      const now = this.clock.ctx.currentTime;
+      try {
+        this._bus.gain.cancelScheduledValues(now);
+        this._bus.gain.setValueAtTime(1, now);
+      } catch (e) {
+      }
       this._next();
     }
     stop() {
       this.playing = false;
       clearTimeout(this._timer);
+      clearTimeout(this._retuneT);
       try {
         this.gen.stop();
       } catch (e) {
@@ -22716,18 +22797,38 @@ void main() {
     }
     skip() {
       if (this.current) this.taste.skip(this.current.genre);
-      this._next();
+      this._next(true);
     }
-    _next() {
+    _next(excludeCurrent = false, forcedGenre = null) {
       if (!this.playing) return;
       clearTimeout(this._timer);
+      const ctx = this.clock.ctx;
+      const now = ctx.currentTime;
+      const old = this.gen;
       try {
-        this.gen.stop();
+        this._bus.gain.cancelScheduledValues(now);
+        this._bus.gain.setValueAtTime(this._bus.gain.value, now);
+        this._bus.gain.linearRampToValueAtTime(1e-4, now + 0.25);
+        this._bus.gain.setValueAtTime(1e-4, now + 0.32);
+        this._bus.gain.linearRampToValueAtTime(1, now + 0.8);
       } catch (e) {
       }
-      const genre = this.taste.pick();
-      const comp = this.gen.compose(genre);
-      const startAt = this.clock.ctx.currentTime + 0.1;
+      setTimeout(() => {
+        try {
+          old.stop();
+        } catch (e) {
+        }
+      }, 320);
+      this.gen = new GenMusic(this.clock);
+      this.gen.out = this._bus;
+      // user-initiated skip (excludeCurrent) stays tight on the dialled-in vibe
+      // (top-5); the natural end-of-track advance keeps the wider rotation.
+      const genre = forcedGenre || this.taste.pick(
+        excludeCurrent && this.current ? this.current.genre : null,
+        excludeCurrent ? 5 : 0
+      );
+      const comp = this.gen.compose(genre, void 0, { plan: "radio" });
+      const startAt = now + 0.35;
       this.clock.markStart(comp.bpm, 0, startAt);
       this.gen.play(startAt);
       this.current = { genre, bpm: comp.bpm, durationSec: comp.durationSec, startedAt: startAt, comp };
@@ -22738,8 +22839,19 @@ void main() {
         this._next();
       }, ms);
     }
+    // Sliders steer the radio LIVE: re-pick shortly after the user stops moving
+    // them and crossfade over if the best-matching genre changed.
     setSliders(s) {
       this.taste.setSliders(s);
+      if (!this.playing) return;
+      clearTimeout(this._retuneT);
+      this._retuneT = setTimeout(() => this._retune(), 350);
+    }
+    _retune() {
+      if (!this.playing) return;
+      const genre = this.taste.pick(null, 3);
+      if (this.current && genre === this.current.genre) return;
+      this._next(false, genre);
     }
   };
 
@@ -23253,7 +23365,10 @@ void main() {
     gabber: { file: "tracks/gabber_175.m4a", bpm: 175, theme: "industrial" },
     hardtechno: { file: "tracks/hardtechno_150.m4a", bpm: 150, theme: "industrial" },
     tribe: { file: "tracks/tribe_155.m4a", bpm: 155, theme: "unicorn" },
-    psytrance: { file: "tracks/psytrance_150.m4a", bpm: 150, theme: "cosmic" }
+    psytrance: { file: "tracks/psytrance_150.m4a", bpm: 150, theme: "cosmic" },
+    psychedelic: { file: "tracks/psychedelic_145.m4a", bpm: 145, theme: "cosmic" },
+    industrialhardcore: { file: "tracks/industrialhardcore_185.m4a", bpm: 185, theme: "industrial" },
+    industrialtechno: { file: "tracks/industrialtechno_135.m4a", bpm: 135, theme: "cosmic" }
   };
   var FORGE_LINES = ["summoning the kick\u2026", "bending the bass\u2026", "charging the drop\u2026", "aligning the grid\u2026", "waking the tribe\u2026"];
   async function startForge(mode, practice = false) {
@@ -23291,7 +23406,11 @@ void main() {
       console.warn("AI forge failed, trying bundled track", e);
     }
     if (!map) {
-      const bt = BUNDLED_TRACKS[genre] || BUNDLED_TRACKS[mode === "origins" ? "hardcore" : "hardstyle"];
+      // v3 fix: NEVER fall back to another genre's file — that made every genre
+      // without a bundled track (psychedelic, industrial*, terror, …) play the
+      // exact same hardstyle/hardcore m4a. Genres without a bundled track now
+      // fall through to the procedural engine composing the CORRECT genre.
+      const bt = BUNDLED_TRACKS[genre] || null;
       if (bt) {
         try {
           const url = ASSETS + bt.file;
