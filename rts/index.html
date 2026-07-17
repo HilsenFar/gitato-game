@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Gitato Command — Multiplayer RTS</title>
+<meta name="description" content="Gitato Command is a free neon micro-RTS you can play in the browser. Harvest crystals, build an army, and destroy the enemy HQ — online against a friend with a room code, or against the AI.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Gitato Command — Multiplayer RTS">
+<meta property="og:description" content="A neon micro-RTS in the browser. Online 1v1 with a room code, or skirmish vs the AI.">
+<meta name="theme-color" content="#050510">
+<link rel="icon" href="../icons/icon-192.png">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<canvas id="game"></canvas>
+
+<!-- top bar + command card -->
+<div id="hud">
+  <div id="topbar">
+    <span id="hud-res" title="Crystals">◆ 0</span>
+    <span id="hud-sup" title="Units">⬢ 0/60</span>
+    <span id="hud-color"></span>
+    <span id="hud-room"></span>
+    <span class="spacer"></span>
+    <button id="btn-amove" class="tbtn" title="Attack-move (A)">⚔</button>
+    <button id="btn-mute" class="tbtn" title="Mute (M)">🔊</button>
+    <button id="btn-menu" class="tbtn" title="Back to menu">☰</button>
+  </div>
+  <canvas id="minimap" width="160" height="160"></canvas>
+  <div id="cardwrap">
+    <div id="sel-info"></div>
+    <div id="card"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- main menu -->
+<div id="menu" class="panel">
+  <h1>GITATO<span> COMMAND</span></h1>
+  <p class="tag">A neon micro-RTS. Destroy the enemy HQ.</p>
+  <div class="btns">
+    <button id="btn-skirmish" class="mbtn">Skirmish vs AI</button>
+    <button id="btn-host" class="mbtn">Host Online Game</button>
+    <div class="joinrow">
+      <input id="join-code" maxlength="6" placeholder="CODE" autocomplete="off" spellcheck="false">
+      <button id="btn-join" class="mbtn">Join Online Game</button>
+    </div>
+  </div>
+  <p id="menu-msg"></p>
+  <details>
+    <summary>How to play</summary>
+    <ul id="how-list"></ul>
+  </details>
+  <p class="foot"><a href="../">← gitato.net</a></p>
+</div>
+
+<!-- game over -->
+<div id="over" class="panel">
+  <h1 id="over-title">VICTORY</h1>
+  <p id="over-sub"></p>
+  <div class="btns">
+    <button id="btn-over-menu" class="mbtn">Back to menu</button>
+  </div>
+</div>
+
+<script src="./vendor/peerjs.min.js"></script>
+<script src="./vendor/three.min.js"></script>
+<script src="./js/const.js"></script>
+<script src="./js/util.js"></script>
+<script src="./js/map.js"></script>
+<script src="./js/sim.js"></script>
+<script src="./js/ai.js"></script>
+<script src="./js/net.js"></script>
+<script src="./js/scene3d.js"></script>
+<script src="./js/render.js"></script>
+<script src="./js/input.js"></script>
+<script src="./js/main.js"></script>
+</body>
+</html>
