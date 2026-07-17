@@ -1,5 +1,5 @@
 // GITATO service worker — bump VERSION on every deploy (PWA rule for all gitato sites).
-const VERSION = 'gitato-game-v9';
+const VERSION = 'gitato-game-v10';
 const SHELL = [
   './',
   './index.html',
