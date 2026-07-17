@@ -1,8 +1,10 @@
 # Gitato Command — multiplayer micro-RTS
 
-A neon real-time strategy game that runs entirely in the browser at `/rts/`.
-No build step, no binary assets — all art is drawn procedurally on canvas, all
-sound is synthesized with WebAudio.
+A neon real-time strategy game that runs entirely in the browser at `/rts/`,
+rendered in 3D with a tilted top-down camera in the spirit of Command & Conquer.
+No build step, no binary art assets — every model is procedural Three.js
+geometry with emissive neon materials, and all sound is synthesized with
+WebAudio.
 
 ## Modes
 
@@ -37,7 +39,8 @@ opponent vanishes (WebRTC close events alone are unreliable).
 | `js/sim.js`   | authoritative simulation (economy, combat, construction) |
 | `js/ai.js`    | skirmish bot |
 | `js/net.js`   | PeerJS host/join wrapper |
-| `js/render.js`| canvas renderer, fog of war, minimap, particles |
+| `js/scene3d.js`| Three.js scene: camera, procedural meshes, fog plane, picking |
+| `js/render.js`| view layer: snapshot interpolation, fog of war, overlay HUD, minimap |
 | `js/input.js` | selection, orders, camera, placement, touch |
 | `js/main.js`  | menus, HUD, game loop, net glue |
 

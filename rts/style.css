@@ -20,11 +20,18 @@ body {
   touch-action: none;
 }
 
+#gl {
+  position: fixed; inset: 0;
+  width: 100vw; height: 100vh;
+  display: block;
+}
 #game {
+  /* transparent overlay above the WebGL canvas; receives all pointer input */
   position: fixed; inset: 0;
   width: 100vw; height: 100vh;
   display: block;
   cursor: crosshair;
+  background: transparent;
 }
 #game.attack-cursor { cursor: cell; }
 

@@ -77,11 +77,11 @@
     RTS.render.setMap(game.map, myPlayer);
     if (mode !== 'client') game.sim = RTS.sim.init(seed);
 
-    // camera on own base
+    // camera centered on own base (cam.x/y = ground point at screen center)
     const st = game.map.starts[myPlayer];
     game.cam.zoom = 1;
-    game.cam.x = st.tx * C.TILE - $('game').clientWidth / 2;
-    game.cam.y = st.ty * C.TILE - $('game').clientHeight / 2;
+    game.cam.x = st.tx * C.TILE;
+    game.cam.y = st.ty * C.TILE;
 
     show(null);
     $('hud').classList.add('show');
@@ -252,7 +252,7 @@
   // ---------- boot ----------
   function boot() {
     const cvGame = $('game'), cvMm = $('minimap');
-    RTS.render.initCanvas(cvGame, cvMm);
+    RTS.render.initCanvas(cvGame, cvMm, $('gl'));
     RTS.input.init(game, cvGame, cvMm);
 
     $('btn-skirmish').addEventListener('click', () => { U.audio(); U.sfx.click(); startLocal(true); });

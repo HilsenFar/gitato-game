@@ -38,22 +38,22 @@ RTS.input = (() => {
     mmCv.addEventListener('touchmove', (e) => { minimapJump(e.touches[0]); e.preventDefault(); }, { passive: false });
   }
 
-  const s2w = (sx, sy) => ({ x: game.cam.x + sx / game.cam.zoom, y: game.cam.y + sy / game.cam.zoom });
+  // screen → ground-plane world point (perspective raycast)
+  const s2w = (sx, sy) => RTS.scene3d.screenToWorld(sx, sy);
 
   function clampCam() {
+    // cam.x / cam.y is the ground point at the center of the screen
     const cam = game.cam;
-    const vw = cv.clientWidth / cam.zoom, vh = cv.clientHeight / cam.zoom;
     const W = C.MAP_W * T, H = C.MAP_H * T;
-    cam.x = U.clamp(cam.x, -vw * 0.2, W - vw * 0.8);
-    cam.y = U.clamp(cam.y, -vh * 0.2, H - vh * 0.8);
+    cam.x = U.clamp(cam.x, 0, W);
+    cam.y = U.clamp(cam.y, 0, H);
   }
 
   function minimapJump(e) {
     const r = mmCv.getBoundingClientRect();
     const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
-    const cam = game.cam;
-    cam.x = fx * C.MAP_W * T - cv.clientWidth / cam.zoom / 2;
-    cam.y = fy * C.MAP_H * T - cv.clientHeight / cam.zoom / 2;
+    game.cam.x = fx * C.MAP_W * T;
+    game.cam.y = fy * C.MAP_H * T;
     clampCam();
   }
 
@@ -82,8 +82,9 @@ RTS.input = (() => {
     mouse.x = e.clientX - rect.left; mouse.y = e.clientY - rect.top;
     if (drag) { drag.x1 = mouse.x; drag.y1 = mouse.y; }
     if (panDrag) {
-      game.cam.x = panDrag.camX - (e.clientX - panDrag.sx) / game.cam.zoom;
-      game.cam.y = panDrag.camY - (e.clientY - panDrag.sy) / game.cam.zoom;
+      const wpp = RTS.scene3d.worldPerPixel();
+      game.cam.x = panDrag.camX - (e.clientX - panDrag.sx) * wpp;
+      game.cam.y = panDrag.camY - (e.clientY - panDrag.sy) * wpp;
       clampCam();
     }
   }
@@ -104,6 +105,7 @@ RTS.input = (() => {
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
     const before = s2w(sx, sy);
     cam.zoom = U.clamp(cam.zoom * (e.deltaY > 0 ? 0.88 : 1.14), 0.45, 2.2);
+    RTS.scene3d.updateCamera(cam, cv.clientWidth, cv.clientHeight);
     const after = s2w(sx, sy);
     cam.x += before.x - after.x; cam.y += before.y - after.y;
     clampCam();
@@ -152,17 +154,20 @@ RTS.input = (() => {
   }
 
   function boxSelect(d, add) {
-    const a = s2w(Math.min(d.x0, d.x1), Math.min(d.y0, d.y1));
-    const b = s2w(Math.max(d.x0, d.x1), Math.max(d.y0, d.y1));
+    // perspective camera → compare in screen space, not world space
+    const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1);
+    const y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1);
+    const inRect = (e) => {
+      const s = RTS.scene3d.worldToScreen(e.x, e.y, 0);
+      return !s.behind && s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1;
+    };
     if (!add) game.sel.clear();
-    const units = myEnts().filter((e) => K[e.kind].unit &&
-      e.x >= a.x && e.x <= b.x && e.y >= a.y && e.y <= b.y);
+    const units = myEnts().filter((e) => K[e.kind].unit && inRect(e));
     if (units.length) {
       units.forEach((e) => game.sel.add(e.id));
       U.sfx.select();
     } else {
-      const bld = myEnts().find((e) => K[e.kind].bld &&
-        e.x >= a.x && e.x <= b.x && e.y >= a.y && e.y <= b.y);
+      const bld = myEnts().find((e) => K[e.kind].bld && inRect(e));
       if (bld) { game.sel.add(bld.id); U.sfx.select(); }
     }
     game.onSelChange();
@@ -291,8 +296,9 @@ RTS.input = (() => {
       const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       game.cam.zoom = U.clamp(touchState.z0 * (touchDist(e) / touchState.d0), 0.45, 2.2);
-      game.cam.x = touchState.cx - (mx - touchState.mx) / game.cam.zoom;
-      game.cam.y = touchState.cy - (my - touchState.my) / game.cam.zoom;
+      const wpp = RTS.scene3d.worldPerPixel();
+      game.cam.x = touchState.cx - (mx - touchState.mx) * wpp;
+      game.cam.y = touchState.cy - (my - touchState.my) * wpp;
       clampCam();
       return;
     }

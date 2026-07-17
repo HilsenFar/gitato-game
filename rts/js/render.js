@@ -1,4 +1,6 @@
-// GITATO COMMAND — canvas renderer: interpolated view, fog of war, minimap, particles
+// GITATO COMMAND — view layer: snapshot interpolation, fog of war, overlay HUD, minimap.
+// World rendering is delegated to scene3d (Three.js); this module draws the
+// transparent 2D overlay (health bars, particles, drag rect) and the minimap.
 'use strict';
 
 RTS.render = (() => {
@@ -7,7 +9,7 @@ RTS.render = (() => {
 
   let cv, ctx, mmCv, mmCtx;
   let map = null;
-  let terrain = null;        // cached ground canvas
+  let terrain = null;        // procedural ground canvas (used as the 3D ground texture)
   let mmTerrain = null;      // cached minimap ground
   let fog = null;            // Uint8Array per tile: 0 unseen, 1 explored, 2 visible
   let fogCv = null, fogCtx = null;
@@ -30,9 +32,10 @@ RTS.render = (() => {
     reset() { this.prev = null; this.next = null; },
   };
 
-  function initCanvas(canvas, minimap) {
+  function initCanvas(canvas, minimap, glCanvas) {
     cv = canvas; ctx = cv.getContext('2d');
     mmCv = minimap; mmCtx = mmCv.getContext('2d');
+    RTS.scene3d.init(glCanvas);
   }
 
   function setMap(m, player) {
@@ -44,6 +47,7 @@ RTS.render = (() => {
     fogCv.width = m.W; fogCv.height = m.H;
     fogCtx = fogCv.getContext('2d');
     buildTerrain();
+    RTS.scene3d.setup(m, terrain, fogCv);
   }
 
   function buildTerrain() {
@@ -51,33 +55,21 @@ RTS.render = (() => {
     terrain.width = map.W * T; terrain.height = map.H * T;
     const g = terrain.getContext('2d');
     const grad = g.createLinearGradient(0, 0, terrain.width, terrain.height);
-    grad.addColorStop(0, '#07071a'); grad.addColorStop(1, '#0b0722');
+    grad.addColorStop(0, '#0a0a20'); grad.addColorStop(1, '#0e0a28');
     g.fillStyle = grad;
     g.fillRect(0, 0, terrain.width, terrain.height);
     // grid
-    g.strokeStyle = 'rgba(80,90,160,.10)';
+    g.strokeStyle = 'rgba(90,100,180,.14)';
     g.lineWidth = 1;
     g.beginPath();
     for (let x = 0; x <= map.W; x++) { g.moveTo(x * T + 0.5, 0); g.lineTo(x * T + 0.5, terrain.height); }
     for (let y = 0; y <= map.H; y++) { g.moveTo(0, y * T + 0.5); g.lineTo(terrain.width, y * T + 0.5); }
     g.stroke();
-    // rocks
-    const rnd = U.rng(7);
+    // darker patches under rocks (3D boxes sit on top)
     for (let ty = 0; ty < map.H; ty++) for (let tx = 0; tx < map.W; tx++) {
       if (!map.rock[ty * map.W + tx]) continue;
-      const x = tx * T, y = ty * T;
-      g.fillStyle = '#1a1a34';
-      g.fillRect(x, y, T, T);
-      g.fillStyle = '#242348';
-      const n = 2 + (rnd() * 3 | 0);
-      for (let i = 0; i < n; i++) {
-        const px = x + rnd() * (T - 10), py = y + rnd() * (T - 10);
-        g.beginPath();
-        g.moveTo(px, py + 8); g.lineTo(px + 5, py); g.lineTo(px + 12, py + 3); g.lineTo(px + 10, py + 10);
-        g.closePath(); g.fill();
-      }
-      g.strokeStyle = 'rgba(120,120,220,.16)';
-      g.strokeRect(x + 0.5, y + 0.5, T - 1, T - 1);
+      g.fillStyle = '#131327';
+      g.fillRect(tx * T, ty * T, T, T);
     }
     // minimap ground
     mmTerrain = document.createElement('canvas');
@@ -100,11 +92,11 @@ RTS.render = (() => {
       for (let dy = -sight; dy <= sight; dy++) for (let dx = -sight; dx <= sight; dx++) {
         if (dx * dx + dy * dy > sight * sight) continue;
         const x = cx + dx, y = cy + dy;
-        if (x < 0 || y < 0 || x >= map.W || y >= map.W) continue;
+        if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
         fog[y * map.W + x] = 2;
       }
     }
-    // redraw fog canvas (1 px per tile, scaled smooth on blit)
+    // redraw fog canvas (1 px per tile; the 3D fog plane and minimap sample it)
     const img = fogCtx.createImageData(map.W, map.H);
     const d = img.data;
     for (let i = 0; i < fog.length; i++) {
@@ -152,40 +144,51 @@ RTS.render = (() => {
     return out;
   }
 
+  // an entity is drawable for me if fog allows it
+  function drawable(e) {
+    if (e.owner < 2 && e.owner !== myPlayer) {
+      const vis = visibleAt(e.x, e.y);
+      if (!vis && !K[e.kind].bld) return false;        // hidden enemy units
+      if (!vis && !exploredAt(e.x, e.y)) return false; // unexplored enemy buildings
+    }
+    if (e.kind === 'crystal' && !exploredAt(e.x, e.y)) return false;
+    return true;
+  }
+
   function entAt(wx, wy) {
     let best = null, bd = 1e9;
     for (const e of ents()) {
       const k = K[e.kind];
-      let hit = false, d = U.dist2(wx, wy, e.x, e.y);
+      let hit = false;
+      const d = U.dist2(wx, wy, e.x, e.y);
       if (k.bld) {
-        hit = Math.abs(wx - e.x) < k.fw * T / 2 + 4 && Math.abs(wy - e.y) < k.fh * T / 2 + 4;
+        hit = Math.abs(wx - e.x) < k.fw * T / 2 + 6 && Math.abs(wy - e.y) < k.fh * T / 2 + 6;
       } else {
-        const r = (k.r || 10) + 6;
+        const r = (k.r || 10) + 8;
         hit = d < r * r;
       }
       if (hit && d < bd) {
-        if (e.owner !== myPlayer && e.owner < 2 && !visibleAt(e.x, e.y)) continue;
+        if (!drawable(e)) continue;
         bd = d; best = e;
       }
     }
     return best;
   }
 
-  // ---- particles / events ----
+  // ---- particles / events (drawn on the overlay at projected positions) ----
   function onEvent(ev) {
     const [kind, x, y] = ev;
     const S = U.sfx;
-    const onScreen = true; // events are rare enough to always play
     switch (kind) {
-      case EV.SHOT: if (onScreen) S.shot(); break;
+      case EV.SHOT: S.shot(); break;
       case EV.HIT:
-        spark(x, y, 4, '#ffd868'); if (onScreen) S.hit(); break;
+        spark(x, y, 4, '#ffd868'); S.hit(); break;
       case EV.BOOM:
         ring(x, y, 30, '#ff9628'); spark(x, y, 10, '#ff9628'); S.boom(); break;
       case EV.BIGBOOM:
         ring(x, y, 70, '#ff5050'); spark(x, y, 24, '#ff8850'); S.bigboom(); break;
       case EV.DEPOSIT:
-        floatText(x, y - 20, '+' + C.CARRY, '#50dc78'); S.deposit(); break;
+        floatText(x, y, '+' + C.CARRY, '#50dc78'); S.deposit(); break;
       case EV.BUILT:
         ring(x, y, 44, '#00ffdc'); S.built(); break;
     }
@@ -197,7 +200,7 @@ RTS.render = (() => {
     }
   };
   const ring = (x, y, r, col) => particles.push({ t: 'r', x, y, r, life: 0.5, max: 0.5, col });
-  const floatText = (x, y, txt, col) => particles.push({ t: 't', x, y, txt, life: 1, max: 1, col });
+  const floatText = (x, y, txt, col) => particles.push({ t: 't', x, y, txt, life: 1, max: 1, z: 30, col });
 
   function stepParticles(dt) {
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -205,7 +208,7 @@ RTS.render = (() => {
       p.life -= dt;
       if (p.life <= 0) { particles.splice(i, 1); continue; }
       if (p.t === 'p') { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92; }
-      if (p.t === 't') p.y -= 24 * dt;
+      if (p.t === 't') p.z += 30 * dt;
     }
   }
 
@@ -223,88 +226,70 @@ RTS.render = (() => {
       cv.width = w * dpr | 0; cv.height = h * dpr | 0;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#04040c';
-    ctx.fillRect(0, 0, w, h);
+    ctx.clearRect(0, 0, w, h); // overlay is transparent; WebGL renders beneath
     if (!map || !view.next) return;
 
-    const cam = st.cam;
-    ctx.save();
-    ctx.scale(cam.zoom, cam.zoom);
-    ctx.translate(-cam.x, -cam.y);
+    const S3 = RTS.scene3d;
+    S3.updateCamera(st.cam, w, h);
 
-    // ground
-    ctx.drawImage(terrain, 0, 0);
+    const list = ents().filter(drawable);
+    const projs = (view.next.p || []).filter((p) => exploredAt(p[0], p[1]));
+    S3.render(list, projs, st.placing, st.sel);
 
-    const list = ents();
-    const selSet = st.sel;
-
-    // buildings first, then crystals, then units
-    const drawOrder = list.slice().sort((a, b) => (K[a.kind].bld ? 0 : a.kind === 'crystal' ? 1 : 2) - (K[b.kind].bld ? 0 : b.kind === 'crystal' ? 1 : 2));
-    for (const e of drawOrder) {
-      if (e.owner < 2 && e.owner !== myPlayer) {
-        const vis = visibleAt(e.x, e.y);
-        if (!vis && !K[e.kind].bld) continue;        // hidden enemy units
-        if (!vis && !exploredAt(e.x, e.y)) continue; // unexplored enemy buildings
+    // ---- overlay: health bars ----
+    for (const e of list) {
+      const k = K[e.kind];
+      const maxhp = e.kind === 'crystal' ? C.CRYSTAL_AMOUNT : k.hp;
+      const frac = U.clamp(e.hp / maxhp, 0, 1);
+      const selected = st.sel.has(e.id);
+      const constructing = (e.flags & 2) !== 0;
+      if (e.kind === 'crystal') continue;
+      if (frac >= 1 && !selected && !constructing && !(k.bld && e.qlen > 0 && e.owner === myPlayer)) continue;
+      const top = k.bld ? 52 : 26;
+      const s = S3.worldToScreen(e.x, e.y, top);
+      if (s.behind) continue;
+      const wBar = k.bld ? 46 : 26;
+      if (frac < 1 || selected) {
+        ctx.fillStyle = 'rgba(0,0,0,.6)';
+        ctx.fillRect(s.x - wBar / 2, s.y, wBar, 4);
+        ctx.fillStyle = frac > 0.5 ? '#50dc78' : frac > 0.25 ? '#ffd868' : '#ff5050';
+        ctx.fillRect(s.x - wBar / 2, s.y, wBar * frac, 4);
       }
-      if (e.kind === 'crystal' && !exploredAt(e.x, e.y)) continue;
-      drawEnt(e, selSet.has(e.id));
+      if (constructing) {
+        ctx.fillStyle = 'rgba(0,0,0,.6)';
+        ctx.fillRect(s.x - wBar / 2, s.y + 6, wBar, 4);
+        ctx.fillStyle = '#00c8ff';
+        ctx.fillRect(s.x - wBar / 2, s.y + 6, wBar * (e.prog / 100), 4);
+      } else if (k.bld && e.qlen > 0 && e.owner === myPlayer) {
+        ctx.fillStyle = 'rgba(0,0,0,.6)';
+        ctx.fillRect(s.x - wBar / 2, s.y + 6, wBar, 4);
+        ctx.fillStyle = '#c88aff';
+        ctx.fillRect(s.x - wBar / 2, s.y + 6, wBar * (e.prog / 100), 4);
+      }
     }
 
-    // projectiles
-    for (const p of view.next.p || []) {
-      if (!visibleAt(p[0], p[1]) && !exploredAt(p[0], p[1])) continue;
-      if (p[2] === 1) { // shell
-        ctx.fillStyle = '#ffb050';
-        glow('#ffb050', 8);
-        ctx.beginPath(); ctx.arc(p[0], p[1], 4, 0, 7); ctx.fill();
-      } else {
-        ctx.strokeStyle = '#eaffff';
-        glow('#00ffdc', 6);
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(p[0] - 4, p[1]); ctx.lineTo(p[0] + 4, p[1]); ctx.stroke();
-      }
-      noGlow();
-    }
-
-    // particles
+    // ---- overlay: particles ----
     for (const p of particles) {
       const a = p.life / p.max;
+      const s = S3.worldToScreen(p.x, p.y, p.z || 6);
+      if (s.behind) continue;
+      ctx.globalAlpha = a;
       if (p.t === 'p') {
-        ctx.globalAlpha = a;
         ctx.fillStyle = p.col;
-        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+        ctx.fillRect(s.x - 2, s.y - 2, 4, 4);
       } else if (p.t === 'r') {
-        ctx.globalAlpha = a;
         ctx.strokeStyle = p.col;
         ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (1 - a) + 6, 0, 7); ctx.stroke();
+        const r = (p.r * (1 - a) + 6) / Math.max(0.4, RTS.scene3d.worldPerPixel());
+        ctx.beginPath(); ctx.ellipse(s.x, s.y, r, r * 0.62, 0, 0, 7); ctx.stroke();
       } else if (p.t === 't') {
-        ctx.globalAlpha = a;
         ctx.fillStyle = p.col;
         ctx.font = 'bold 14px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(p.txt, p.x, p.y);
+        ctx.fillText(p.txt, s.x, s.y);
       }
       ctx.globalAlpha = 1;
     }
-
-    // placement ghost
-    if (st.placing) {
-      const k = K[st.placing.kind];
-      const x = st.placing.tx * T, y = st.placing.ty * T;
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = st.placing.valid ? '#00ffdc' : '#ff4060';
-      ctx.fillRect(x, y, k.fw * T, k.fh * T);
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = st.placing.valid ? '#00ffdc' : '#ff4060';
-      ctx.strokeRect(x + 1, y + 1, k.fw * T - 2, k.fh * T - 2);
-    }
-
-    // fog (scaled up, smoothed)
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(fogCv, 0, 0, map.W, map.H, 0, 0, map.W * T, map.H * T);
-
-    ctx.restore();
 
     // drag-select rectangle (screen space)
     if (st.drag) {
@@ -317,149 +302,17 @@ RTS.render = (() => {
       ctx.setLineDash([]);
     }
 
-    drawMinimap(st, list);
+    drawMinimap(st, list, w, h);
   }
 
-  const glow = (col, blur) => { ctx.shadowColor = col; ctx.shadowBlur = blur; };
-  const noGlow = () => { ctx.shadowBlur = 0; };
-
-  function pcol(owner) { return owner === 2 ? RTS.NCOL : RTS.PCOL[owner]; }
-
-  function drawEnt(e, selected) {
-    const k = K[e.kind], col = pcol(e.owner);
-    ctx.save();
-    ctx.translate(e.x, e.y);
-
-    if (selected) {
-      ctx.strokeStyle = '#ffffff';
-      ctx.globalAlpha = 0.85;
-      ctx.lineWidth = 1.5;
-      const sr = k.bld ? Math.max(k.fw, k.fh) * T * 0.62 : (k.r || 10) + 5;
-      ctx.beginPath(); ctx.arc(0, 0, sr, 0, 7); ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-
-    const constructing = (e.flags & 2) !== 0;
-    if (constructing) ctx.globalAlpha = 0.45 + 0.4 * (e.prog / 100);
-
-    glow(col.main, 10);
-    ctx.strokeStyle = col.main;
-    ctx.fillStyle = col.dim;
-    ctx.lineWidth = 2;
-
-    switch (e.kind) {
-      case 'crystal': {
-        const sc = 0.5 + 0.5 * (e.hp / C.CRYSTAL_AMOUNT);
-        glow(RTS.NCOL.main, 12);
-        ctx.strokeStyle = RTS.NCOL.main;
-        ctx.fillStyle = 'rgba(80,220,120,.25)';
-        ctx.beginPath();
-        ctx.moveTo(0, -12 * sc); ctx.lineTo(9 * sc, 0); ctx.lineTo(0, 12 * sc); ctx.lineTo(-9 * sc, 0);
-        ctx.closePath(); ctx.fill(); ctx.stroke();
-        break;
-      }
-      case 'worker': {
-        ctx.beginPath(); ctx.arc(0, 0, 7, 0, 7); ctx.fill(); ctx.stroke();
-        ctx.rotate(e.face);
-        ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(12, 0); ctx.stroke();
-        if (e.flags & 1) { ctx.fillStyle = RTS.NCOL.main; ctx.fillRect(3, -3, 5, 5); }
-        break;
-      }
-      case 'marine': {
-        ctx.rotate(e.face);
-        ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-7, -7); ctx.lineTo(-4, 0); ctx.lineTo(-7, 7);
-        ctx.closePath(); ctx.fill(); ctx.stroke();
-        if (e.flags & 4) { ctx.fillStyle = '#fff'; ctx.fillRect(11, -1.5, 5, 3); }
-        break;
-      }
-      case 'brute': {
-        ctx.rotate(e.face);
-        ctx.beginPath();
-        for (let i = 0; i < 5; i++) {
-          const a = i * Math.PI * 2 / 5;
-          ctx[i ? 'lineTo' : 'moveTo'](Math.cos(a) * 12, Math.sin(a) * 12);
-        }
-        ctx.closePath(); ctx.fill(); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(14, 0); ctx.stroke();
-        break;
-      }
-      case 'mortar': {
-        ctx.rotate(e.face);
-        ctx.fillRect(-9, -8, 18, 16); ctx.strokeRect(-9, -8, 18, 16);
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(16, 0); ctx.lineWidth = 4; ctx.stroke();
-        break;
-      }
-      case 'hq': {
-        const R = T * 1.35;
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-          const a = i * Math.PI / 3 - Math.PI / 6;
-          ctx[i ? 'lineTo' : 'moveTo'](Math.cos(a) * R, Math.sin(a) * R);
-        }
-        ctx.closePath(); ctx.fill(); ctx.stroke();
-        ctx.beginPath(); ctx.arc(0, 0, R * 0.45, 0, 7); ctx.stroke();
-        break;
-      }
-      case 'rax': {
-        ctx.fillRect(-T, -T * 0.8, T * 2, T * 1.6); ctx.strokeRect(-T, -T * 0.8, T * 2, T * 1.6);
-        ctx.beginPath(); ctx.moveTo(-10, 8); ctx.lineTo(0, -8); ctx.lineTo(10, 8); ctx.stroke();
-        break;
-      }
-      case 'fact': {
-        ctx.fillRect(-T, -T * 0.8, T * 2, T * 1.6); ctx.strokeRect(-T, -T * 0.8, T * 2, T * 1.6);
-        ctx.beginPath(); ctx.arc(-8, 0, 7, 0, 7); ctx.stroke();
-        ctx.beginPath(); ctx.arc(9, 0, 7, 0, 7); ctx.stroke();
-        break;
-      }
-      case 'turret': {
-        ctx.beginPath(); ctx.arc(0, 0, 11, 0, 7); ctx.fill(); ctx.stroke();
-        ctx.rotate(e.face);
-        ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(17, 0); ctx.stroke();
-        if (e.flags & 4) { ctx.fillStyle = '#fff'; ctx.fillRect(16, -2, 5, 4); }
-        break;
-      }
-    }
-    noGlow();
-    ctx.globalAlpha = 1;
-    ctx.restore();
-
-    // bars (world space, after restore)
-    const maxhp = e.kind === 'crystal' ? C.CRYSTAL_AMOUNT : K[e.kind].hp;
-    const frac = U.clamp(e.hp / maxhp, 0, 1);
-    const wBar = k.bld ? k.fw * T * 0.9 : 22;
-    const yBar = e.y - (k.bld ? k.fh * T * 0.62 : (k.r || 10) + 9);
-    if (e.kind !== 'crystal' && (frac < 1 || selected)) {
-      ctx.fillStyle = 'rgba(0,0,0,.6)';
-      ctx.fillRect(e.x - wBar / 2, yBar, wBar, 4);
-      ctx.fillStyle = frac > 0.5 ? '#50dc78' : frac > 0.25 ? '#ffd868' : '#ff5050';
-      ctx.fillRect(e.x - wBar / 2, yBar, wBar * frac, 4);
-    }
-    if (constructing) {
-      ctx.fillStyle = 'rgba(0,0,0,.6)';
-      ctx.fillRect(e.x - wBar / 2, yBar + 6, wBar, 4);
-      ctx.fillStyle = '#00c8ff';
-      ctx.fillRect(e.x - wBar / 2, yBar + 6, wBar * (e.prog / 100), 4);
-    } else if (k.bld && e.qlen > 0 && e.owner === myPlayer) {
-      ctx.fillStyle = 'rgba(0,0,0,.6)';
-      ctx.fillRect(e.x - wBar / 2, yBar + 6, wBar, 4);
-      ctx.fillStyle = '#c88aff';
-      ctx.fillRect(e.x - wBar / 2, yBar + 6, wBar * (e.prog / 100), 4);
-    }
-  }
-
-  function drawMinimap(st, list) {
-    const S = mmCv.width; // square, e.g. 160
+  function drawMinimap(st, list, w, h) {
+    const S = mmCv.width;
     mmCtx.setTransform(1, 0, 0, 1, 0, 0);
     mmCtx.imageSmoothingEnabled = false;
     mmCtx.clearRect(0, 0, S, S);
     mmCtx.drawImage(mmTerrain, 0, 0, S, S);
     const sc = S / (map.W * T);
     for (const e of list) {
-      if (e.owner < 2 && e.owner !== myPlayer && !visibleAt(e.x, e.y)) {
-        if (!K[e.kind].bld || !exploredAt(e.x, e.y)) continue;
-      }
-      if (e.kind === 'crystal' && !exploredAt(e.x, e.y)) continue;
       mmCtx.fillStyle = e.owner === 2 ? RTS.NCOL.main : RTS.PCOL[e.owner].main;
       const sz = K[e.kind].bld ? 4 : 2;
       mmCtx.fillRect(e.x * sc - sz / 2, e.y * sc - sz / 2, sz, sz);
@@ -468,12 +321,18 @@ RTS.render = (() => {
     mmCtx.globalAlpha = 0.85;
     mmCtx.drawImage(fogCv, 0, 0, map.W, map.H, 0, 0, S, S);
     mmCtx.globalAlpha = 1;
-    // viewport rect
-    const vw = cv.clientWidth / st.cam.zoom, vh = cv.clientHeight / st.cam.zoom;
+    // viewport trapezoid (project the 4 screen corners onto the ground)
+    const cs = [[0, 0], [w, 0], [w, h], [0, h]].map(([x, y]) => RTS.scene3d.screenToWorld(x, y));
     mmCtx.strokeStyle = '#ffffff';
     mmCtx.lineWidth = 1;
-    mmCtx.strokeRect(st.cam.x * sc, st.cam.y * sc, vw * sc, vh * sc);
+    mmCtx.beginPath();
+    cs.forEach((c, i) => {
+      const px = U.clamp(c.x * sc, 0, S), py = U.clamp(c.y * sc, 0, S);
+      if (i === 0) mmCtx.moveTo(px, py); else mmCtx.lineTo(px, py);
+    });
+    mmCtx.closePath();
+    mmCtx.stroke();
   }
 
-  return { initCanvas, setMap, view, draw, ents, entAt, visibleAt, exploredAt };
+  return { initCanvas, setMap, view, draw, ents, entAt, visibleAt, exploredAt, drawable };
 })();
