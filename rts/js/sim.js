@@ -50,6 +50,7 @@ RTS.sim = (() => {
         state: 'idle', path: null, pi: 0, tx: x, ty: y,
         targetId: 0, amx: 0, amy: 0, carry: 0, ht: 0, cd: 0,
         crysId: 0, buildId: 0, stuck: 0, lastX: x, lastY: y,
+        kills: 0, vet: 0,
       });
     }
     if (k.bld) {
@@ -359,8 +360,13 @@ RTS.sim = (() => {
     if (e.cd <= 0) {
       e.cd = k.cd; e.flash = 0.12;
       if (k.proj) fireProjectile(s, e, t, k);
-      else { damage(s, t, k.dmg, e.owner); s.evs.push([RTS.EV.HIT, t.x | 0, t.y | 0]); }
+      else { damage(s, t, attackDmg(e, k), e.owner, e.id); s.evs.push([RTS.EV.HIT, t.x | 0, t.y | 0]); }
     }
+  }
+
+  // veterancy: damage scaled by the attacker's rank (buildings have no rank)
+  function attackDmg(e, k) {
+    return e.vet ? k.dmg * RTS.VET.dmg[e.vet] : k.dmg;
   }
 
   function tRadius(t) {
@@ -372,8 +378,8 @@ RTS.sim = (() => {
     s.projs = s.projs || [];
     s.projs.push({
       x: from.x, y: from.y, tid: target.id, tx: target.x, ty: target.y,
-      spd: RTS.PROJ_SPEED[k.proj], dmg: k.dmg, splash: k.splash || 0,
-      owner: from.owner, kind: k.proj,
+      spd: RTS.PROJ_SPEED[k.proj], dmg: attackDmg(from, k), splash: k.splash || 0,
+      owner: from.owner, kind: k.proj, srcId: from.id,
     });
     s.evs.push([RTS.EV.SHOT, from.x | 0, from.y | 0]);
   }
@@ -427,7 +433,9 @@ RTS.sim = (() => {
     const b = e.buildId ? s.byId.get(e.buildId) : null;
     if (!b || b.hp <= 0 || b.prog >= 1) { e.state = 'idle'; e.buildId = 0; return; }
     const bk = K[b.kind];
-    const reach = Math.max(bk.fw, bk.fh) * T * 0.5 + T * 0.9;
+    // reach must exceed the diagonal-neighbour tile distance (~1.42 T) or a
+    // worker parked on the corner tile of a 1x1 site repaths to itself forever
+    const reach = Math.max(bk.fw, bk.fh) * T * 0.5 + T * 1.0;
     if (U.dist(e.x, e.y, b.x, b.y) > reach) {
       if (!e.path) pathToEntity(s, e, b);
       if (followPath(s, e, k, dt)) e.path = null;
@@ -468,10 +476,20 @@ RTS.sim = (() => {
       e.pi++;
       if (e.pi >= e.path.length) { e.path = null; return true; }
     }
-    // stuck detection: barely moving for ~1.2 s → repath
+    // stuck detection: barely moving for ~1.2 s → sidestep + repath.
+    // The sidestep breaks symmetric push deadlocks where two units shoving in
+    // opposite directions cancel each other's movement exactly (deterministic:
+    // id parity picks the side, and only the host runs the sim).
     e.stuck += dt;
     if (e.stuck >= 1.2) {
-      if (U.dist2(e.x, e.y, e.lastX, e.lastY) < 8 * 8) setPath(s, e, e.tx, e.ty);
+      if (U.dist2(e.x, e.y, e.lastX, e.lastY) < 8 * 8) {
+        const wp2 = e.path && e.pi < e.path.length ? e.path[e.pi] : null;
+        if (wp2) {
+          const a = Math.atan2(wp2.y - e.y, wp2.x - e.x) + ((e.id & 1) ? 1 : -1) * Math.PI / 2;
+          e.x += Math.cos(a) * 10; e.y += Math.sin(a) * 10; // separate() re-clamps
+        }
+        setPath(s, e, e.tx, e.ty);
+      }
       e.stuck = 0; e.lastX = e.x; e.lastY = e.y;
     }
     return false;
@@ -549,11 +567,11 @@ RTS.sim = (() => {
         if (p.splash) {
           for (const o of s.ents) {
             if (o.owner === p.owner || o.owner > 1) continue;
-            if (U.dist2(p.tx, p.ty, o.x, o.y) <= p.splash * p.splash) damage(s, o, p.dmg, p.owner);
+            if (U.dist2(p.tx, p.ty, o.x, o.y) <= p.splash * p.splash) damage(s, o, p.dmg, p.owner, p.srcId);
           }
           s.evs.push([RTS.EV.BOOM, p.tx | 0, p.ty | 0]);
         } else {
-          if (t && t.hp > 0) damage(s, t, p.dmg, p.owner);
+          if (t && t.hp > 0) damage(s, t, p.dmg, p.owner, p.srcId);
           s.evs.push([RTS.EV.HIT, p.tx | 0, p.ty | 0]);
         }
         s.projs.splice(i, 1);
@@ -565,11 +583,30 @@ RTS.sim = (() => {
     }
   }
 
-  function damage(s, e, dmg, byOwner) {
+  function damage(s, e, dmg, byOwner, bySrcId) {
     if (e.hp <= 0) return;
     e.hp -= dmg;
     e.lastHitTick = s.tick;
     e.lastHitBy = byOwner;
+    if (e.hp <= 0 && bySrcId) creditKill(s, bySrcId, e);
+  }
+
+  // veterancy: count the kill for the attacker; promote at rank thresholds
+  function creditKill(s, srcId, victim) {
+    const a = s.byId.get(srcId);
+    if (!a || a.hp <= 0 || victim.owner > 1 || victim.owner === a.owner) return;
+    const V = RTS.VET;
+    if (!V.kinds.includes(a.kind)) return;
+    a.kills++;
+    let rank = 0;
+    for (let i = 0; i < V.kills.length; i++) if (a.kills >= V.kills[i]) rank = i + 1;
+    if (rank > a.vet) {
+      a.vet = rank;
+      const newMax = Math.round(K[a.kind].hp * V.hp[rank]);
+      a.hp += newMax - a.maxhp; // heal the new margin
+      a.maxhp = newMax;
+      s.evs.push([RTS.EV.PROMOTE, a.x | 0, a.y | 0]);
+    }
   }
 
   function reap(s) {
@@ -598,8 +635,9 @@ RTS.sim = (() => {
   }
 
   // ---- compact snapshot for the wire / renderer ----
-  // ent row: [id, kindIdx, owner, x, y, hp, faceDeg, flags, qlen, progPct, qKindIdx]
+  // ent row: [id, kindIdx, owner, x, y, hp, faceDeg, flags, qlen, progPct, qKindIdx, vet]
   // flags: 1 carrying, 2 constructing, 4 muzzle flash
+  // INVARIANT: new fields are only ever APPENDED at the end (render.js reads by index)
   function snapshot(s) {
     const e = [];
     for (const o of s.ents) {
@@ -615,7 +653,7 @@ RTS.sim = (() => {
         qkind = KL.indexOf(q.kind);
       }
       e.push([o.id, KL.indexOf(o.kind), o.owner, o.x | 0, o.y | 0, Math.ceil(o.hp),
-        ((o.face * 180 / Math.PI) | 0) & 511, flags, qlen, prog, qkind]);
+        ((((o.face * 180 / Math.PI) | 0) % 360) + 360) % 360, flags, qlen, prog, qkind, o.vet || 0]);
     }
     const p = (s.projs || []).map((pr) => [pr.x | 0, pr.y | 0, pr.kind === 'shell' ? 1 : 0]);
     const snap = {

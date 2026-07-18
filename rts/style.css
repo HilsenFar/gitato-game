@@ -92,6 +92,10 @@ body {
 }
 .cbtn:hover { border-color: var(--cyan); color: var(--cyan); }
 .cbtn .cost { color: var(--green); font-weight: 400; font-size: .75rem; }
+.cbtn .key {
+  color: var(--dim); font-weight: 400; font-size: .7rem;
+  border: 1px solid var(--line); border-radius: 4px; padding: 0 .25rem;
+}
 .cbtn.wide { flex-basis: 100%; justify-content: center; }
 
 #toast {
@@ -136,6 +140,11 @@ body {
   transition: transform .12s, box-shadow .12s;
 }
 .mbtn:hover { transform: translateY(-2px); box-shadow: 0 0 24px rgba(0, 255, 220, .4); }
+.mbtn.lang {
+  border-color: var(--line); color: var(--dim);
+  font-size: .8rem; padding: .45rem .8rem;
+}
+.mbtn.lang:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: none; }
 .joinrow { display: flex; gap: .5rem; }
 .joinrow .mbtn { flex: 1; border-color: var(--magenta); color: var(--magenta); }
 .joinrow .mbtn:hover { box-shadow: 0 0 24px rgba(255, 40, 180, .4); }

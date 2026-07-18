@@ -115,6 +115,12 @@ RTS.input = (() => {
   function onKeyDown(e) {
     if (game.mode === 'menu') return;
     keys.add(e.code);
+    // command-card hotkeys (train buttons etc., physical codes like KeyQ)
+    if (game.cardHotkeys && game.cardHotkeys[e.code]) {
+      U.sfx.click();
+      game.cardHotkeys[e.code]();
+      return;
+    }
     switch (e.code) {
       case 'KeyA': if (game.sel.size && !game.placing) setAttackMod(true); break;
       case 'KeyS': sendToSel('stop'); break;

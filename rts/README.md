@@ -20,8 +20,20 @@ WebAudio.
 ## Gameplay
 
 Harvest crystals with workers, build Barracks / Factory / Turrets, train
-marines, brutes and mortars, and destroy the enemy HQ. Fog of war, minimap,
-drag-select, attack-move (`A`), rally points, and touch controls are all in.
+marines, brutes, mortars and raiders, and destroy the enemy HQ. Fog of war,
+minimap, drag-select, attack-move (`A`), rally points, train hotkeys (`Q`/`W`
+on a selected production building), and touch controls are all in.
+
+- **Raider** — fast wedge-shaped harass buggy from the Factory. Shreds workers
+  and mortars, melts against brutes and turrets.
+- **Veterancy** — combat units (marine, brute, mortar, raider) rank up at 3 and
+  8 kills: +15%/+30% damage and +20%/+40% max hp. Gold chevrons above the
+  health bar; rank 2 adds a gold ring on the 3D mesh.
+- **Smarter skirmish bot** — builds base turrets, expands to a new HQ when its
+  crystal line runs dry, mixes raiders into its waves and sends raider squads
+  after your worker line.
+- **Language** — UI is English by default; an EN/DA toggle in the main menu
+  switches to Danish (persisted in `localStorage['rts-lang']`).
 
 ## Architecture
 

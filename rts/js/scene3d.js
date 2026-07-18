@@ -45,6 +45,7 @@ RTS.scene3d = (() => {
     m.bolt = new THREE.MeshBasicMaterial({ color: 0xeaffff });
     m.shell = new THREE.MeshBasicMaterial({ color: 0xffb050 });
     m.ringSel = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+    m.vetGold = new THREE.MeshBasicMaterial({ color: 0xffd868, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
     m.ghostOk = new THREE.MeshBasicMaterial({ color: 0x00ffdc, transparent: true, opacity: 0.4 });
     m.ghostBad = new THREE.MeshBasicMaterial({ color: 0xff4060, transparent: true, opacity: 0.4 });
     return m;
@@ -153,6 +154,21 @@ RTS.scene3d = (() => {
         add(new THREE.BoxGeometry(20, 10, 16), pm.body, 0, 6, 0);
         add(new THREE.CylinderGeometry(2.5, 3, 20, 8), pm.soft, 6, 14, 0, -1.0);
         break;
+      case 'raider': {
+        // wedge-shaped harass buggy pointing +x, neon trim, 4 low wheels
+        add(new THREE.BoxGeometry(14, 5, 10), pm.body, -2, 6, 0);
+        const nose = add(new THREE.ConeGeometry(5, 12, 4), pm.body, 10, 6, 0);
+        nose.rotation.z = -Math.PI / 2;
+        nose.rotation.x = Math.PI / 4;
+        add(new THREE.BoxGeometry(9, 1.6, 2), pm.soft, -3, 9.3, 0);       // spoiler trim
+        add(new THREE.BoxGeometry(2, 1.6, 8), pm.soft, 3, 9.3, 0);        // cross trim
+        const wheelGeo = new THREE.CylinderGeometry(2.8, 2.8, 2, 10);
+        for (const [wx, wz] of [[4, 6], [4, -6], [-7, 6], [-7, -6]]) {
+          const wheel = add(wheelGeo, pm.soft, wx, 2.8, wz);
+          wheel.rotation.x = Math.PI / 2;
+        }
+        break;
+      }
       case 'hq': {
         add(new THREE.CylinderGeometry(T * 1.3, T * 1.45, 30, 6), pm.body, 0, 15, 0);
         add(new THREE.CylinderGeometry(T * 0.55, T * 0.55, 46, 6), pm.soft, 0, 23, 0);
@@ -230,9 +246,17 @@ RTS.scene3d = (() => {
         scene.remove(m.group); meshes.delete(e.id); m = null;
       }
       if (!m) {
-        m = { group: buildMesh(e.kind, e.owner), kind: e.kind, owner: e.owner };
+        m = { group: buildMesh(e.kind, e.owner), kind: e.kind, owner: e.owner, vet: 0 };
         scene.add(m.group);
         meshes.set(e.id, m);
+      }
+      // rank-2 veterans get a subtle gold ring at the base of the mesh
+      if ((e.vet || 0) >= 2 && !m.vetRing) {
+        const rad = (K[e.kind].r || 10) + 4;
+        m.vetRing = new THREE.Mesh(new THREE.RingGeometry(rad, rad + 2.2, 22), mats.vetGold);
+        m.vetRing.rotation.x = -Math.PI / 2;
+        m.vetRing.position.y = 1.2;
+        m.group.add(m.vetRing);
       }
       m.group.position.set(e.x, 0, e.y);
       if (K[e.kind].unit || e.kind === 'turret') m.group.rotation.y = -e.face;

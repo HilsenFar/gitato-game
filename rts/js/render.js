@@ -139,6 +139,7 @@ RTS.render = (() => {
       out.push({
         id: e[0], kind: KL[e[1]], owner: e[2], x, y, hp: e[5],
         face: face * Math.PI / 180, flags: e[7], qlen: e[8], prog: e[9], qkind: e[10],
+        vet: e[11] || 0,
       });
     }
     return out;
@@ -191,6 +192,8 @@ RTS.render = (() => {
         floatText(x, y, '+' + C.CARRY, '#50dc78'); S.deposit(); break;
       case EV.BUILT:
         ring(x, y, 44, '#00ffdc'); S.built(); break;
+      case EV.PROMOTE:
+        ring(x, y, 26, '#ffd868'); spark(x, y, 12, '#ffd868'); S.built(); break;
     }
   }
   const spark = (x, y, n, col) => {
@@ -239,16 +242,30 @@ RTS.render = (() => {
     // ---- overlay: health bars ----
     for (const e of list) {
       const k = K[e.kind];
-      const maxhp = e.kind === 'crystal' ? C.CRYSTAL_AMOUNT : k.hp;
+      let maxhp = e.kind === 'crystal' ? C.CRYSTAL_AMOUNT : k.hp;
+      if (e.vet) maxhp = Math.round(k.hp * RTS.VET.hp[e.vet]);
       const frac = U.clamp(e.hp / maxhp, 0, 1);
       const selected = st.sel.has(e.id);
       const constructing = (e.flags & 2) !== 0;
       if (e.kind === 'crystal') continue;
-      if (frac >= 1 && !selected && !constructing && !(k.bld && e.qlen > 0 && e.owner === myPlayer)) continue;
+      if (frac >= 1 && !selected && !constructing && !e.vet && !(k.bld && e.qlen > 0 && e.owner === myPlayer)) continue;
       const top = k.bld ? 52 : 26;
       const s = S3.worldToScreen(e.x, e.y, top);
       if (s.behind) continue;
       const wBar = k.bld ? 46 : 26;
+      // veterancy chevrons: 1-2 gold marks above the health bar
+      if (e.vet) {
+        ctx.strokeStyle = '#ffd868';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < e.vet; i++) {
+          const cx0 = s.x - (e.vet - 1) * 4 + i * 8;
+          ctx.beginPath();
+          ctx.moveTo(cx0 - 3, s.y - 4);
+          ctx.lineTo(cx0, s.y - 7);
+          ctx.lineTo(cx0 + 3, s.y - 4);
+          ctx.stroke();
+        }
+      }
       if (frac < 1 || selected) {
         ctx.fillStyle = 'rgba(0,0,0,.6)';
         ctx.fillRect(s.x - wBar / 2, s.y, wBar, 4);

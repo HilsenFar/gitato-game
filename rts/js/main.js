@@ -18,6 +18,8 @@
     remote: [],          // commands received from the connected client
     overShown: false,
     roomCode: '',
+    cardHotkeys: {},     // physical key code -> command-card action
+
     sendCmd(cmd) {
       cmd.p = game.myPlayer;
       if (game.mode === 'client') RTS.net.send({ c: 'cmds', list: [cmd] });
@@ -87,7 +89,7 @@
     $('hud').classList.add('show');
     $('hud-color').textContent = STR.youAre.replace('{color}', myPlayer === 0 ? STR.cyan : STR.magenta);
     $('hud-color').style.color = RTS.PCOL[myPlayer].main;
-    $('hud-room').textContent = game.roomCode && mode !== 'skirmish' ? 'room ' + game.roomCode : '';
+    $('hud-room').textContent = game.roomCode && mode !== 'skirmish' ? STR.room.replace('{code}', game.roomCode) : '';
     buildCommandCard();
 
     if (mode !== 'client') {
@@ -185,7 +187,7 @@
   }
 
   function showGameOver(won, subtitle, draw) {
-    $('over-title').textContent = draw ? 'DRAW' : won ? STR.victory : STR.defeat;
+    $('over-title').textContent = draw ? STR.draw : won ? STR.victory : STR.defeat;
     $('over-title').style.color = won && !draw ? RTS.PCOL[game.myPlayer].main : '#ff5050';
     $('over-sub').textContent = subtitle || '';
     show('over');
@@ -197,6 +199,7 @@
   function buildCommandCard() {
     const card = $('card');
     card.innerHTML = '';
+    game.cardHotkeys = {};
     const sel = RTS.input.selEnts();
     const info = $('sel-info');
     if (!sel.length) { info.textContent = ''; return; }
@@ -218,8 +221,8 @@
     const units = sel.filter((e) => K[e.kind].unit);
 
     if (units.length) {
-      addBtn('⚔ Attack-move', 0, () => RTS.input.setAttackMod(true), 'wide');
-      addBtn('✋ Stop', 0, () => RTS.input.sendToSel('stop'));
+      addBtn('⚔ ' + STR.attackMove, 0, () => RTS.input.setAttackMod(true), 'wide');
+      addBtn('✋ ' + STR.stop, 0, () => RTS.input.sendToSel('stop'));
     }
     if (hasWorker) {
       for (const bk of ['rax', 'fact', 'turret', 'hq']) {
@@ -228,17 +231,21 @@
         });
       }
     }
-    // single selected finished building → train buttons
+    // single selected finished building → train buttons (hotkeys Q/W/E by slot)
+    const trainKeys = ['KeyQ', 'KeyW', 'KeyE'];
     const b = sel.find((e) => K[e.kind].bld && !(e.flags & 2));
     if (b && K[b.kind].trains) {
-      for (const uk of K[b.kind].trains) {
-        addBtn('▲ ' + STR.names[uk], K[uk].cost, () => {
+      K[b.kind].trains.forEach((uk, slot) => {
+        const fn = () => {
           const snap = RTS.render.view.next;
           if (snap && snap.res[game.myPlayer] < K[uk].cost) { U.sfx.error(); game.toast(STR.needCrystals); return; }
           if (snap && snap.sup[game.myPlayer] >= C.UNIT_CAP) { U.sfx.error(); game.toast(STR.atCap); return; }
           game.sendCmd({ c: 'train', tid: b.id, kind: uk });
-        });
-      }
+        };
+        const key = trainKeys[slot];
+        addBtn('▲ ' + STR.names[uk] + (key ? ` <span class="key">${key.slice(3)}</span>` : ''), K[uk].cost, fn);
+        if (key) game.cardHotkeys[key] = fn;
+      });
     }
   }
 
@@ -270,8 +277,30 @@
     $('btn-amove').addEventListener('click', () => RTS.input.setAttackMod(true));
     $('btn-over-menu').addEventListener('click', () => { U.sfx.click(); toMenu(); });
 
-    // how-to list
+    // menu strings from the active language table
+    document.querySelector('#menu .tag').textContent = STR.tag;
+    $('btn-skirmish').textContent = STR.skirmish;
+    $('btn-host').textContent = STR.host;
+    $('btn-join').textContent = STR.join;
+    $('btn-over-menu').textContent = STR.backToMenu;
+    document.querySelector('#menu summary').textContent = STR.howTitle;
     $('how-list').innerHTML = STR.how.map((l) => `<li>${l}</li>`).join('');
+    document.documentElement.lang = RTS.LANG;
+    $('hud-res').title = STR.crystals;
+    $('hud-sup').title = STR.supply;
+    $('btn-amove').title = STR.attackMove + ' (A)';
+    $('btn-mute').title = STR.mute + ' (M)';
+    $('btn-menu').title = STR.backToMenu;
+    $('join-code').placeholder = STR.codePH;
+
+    // EN/DA toggle (persisted; English is the default)
+    const langBtn = $('btn-lang');
+    langBtn.textContent = STR.language + ': ' + (RTS.LANG === 'da' ? 'DA' : 'EN');
+    langBtn.addEventListener('click', () => {
+      U.sfx.click();
+      try { localStorage.setItem('rts-lang', RTS.LANG === 'da' ? 'en' : 'da'); } catch (e) { /* storage blocked */ }
+      location.reload();
+    });
 
     const frame = () => {
       RTS.input.update(1 / 60);
