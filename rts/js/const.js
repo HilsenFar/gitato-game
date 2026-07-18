@@ -16,7 +16,7 @@ RTS.C = {
   CRYSTAL_AMOUNT: 1500,
   CARRY: 8,
   HARVEST_TIME: 2.0,
-  ROOM_PREFIX: 'gitato-rts-v3-',
+  ROOM_PREFIX: 'gitato-rts-v4-', // v4: upgrades/auto/rally-in-snapshot wire changes
 };
 
 // kind ids are the index into this list (wire format uses the index).
@@ -50,10 +50,35 @@ RTS.VET = {
 
 // skirmish bot tuning
 RTS.AI = {
-  waveCap: 30,       // max army size that triggers an attack wave
   expandAt: 3000,    // expand when crystals near own HQs hold less than this
   harassSize: 3,     // raiders per harass squad
 };
+
+// AI difficulty presets (menu row under Skirmish; persisted in localStorage['rts-diff']).
+// waveCap: max army size that triggers a wave. harassEvery: seconds between
+// raider harass squads (0 = never). expand: may build expansion HQs.
+// ecoEvery: economy/production decisions run every Nth think (1 = every).
+// firstAttack: no attack waves before this many seconds. waveCommit: seconds a
+// wave stays committed (also the minimum pause between waves). tech: buys the
+// Mining Drill / Combat Stims upgrades when it can afford them.
+// wave0: army size that triggers the FIRST attack wave (grows +4 up to waveCap)
+// armyCap: stop training combat units above this size (0 = unlimited)
+// turretCap: max defensive turrets the bot builds
+// recall: abort a committed push to defend the base when it is under attack
+RTS.AI_DIFF = {
+  easy:   { wave0: 4,  waveCap: 10, armyCap: 4, turretCap: 0, harassEvery: 0,  expand: false, ecoEvery: 2, firstAttack: 300, waveCommit: 90, tech: false, recall: false },
+  normal: { wave0: 8,  waveCap: 24, armyCap: 0, turretCap: 2, harassEvery: 90, expand: true,  ecoEvery: 1, firstAttack: 0,   waveCommit: 45, tech: false, recall: true },
+  hard:   { wave0: 14, waveCap: 30, armyCap: 0, turretCap: 0, harassEvery: 60, expand: true,  ecoEvery: 1, firstAttack: 0,   waveCommit: 45, tech: true,  recall: true },
+};
+
+// one-time player technologies (s.tech[p] is a bitmask), bought from the named
+// building via {c:'upgrade', tid, tech}. Turret Overcharge is per-turret (e.up).
+RTS.TECH = {
+  drill:  { bit: 1, cost: 300, bld: 'hq',   carry: 12 },                              // worker carry 8 -> 12
+  stims:  { bit: 2, cost: 250, bld: 'rax',  kinds: ['marine', 'brute'],  dmgMul: 1.10 },
+  alloys: { bit: 4, cost: 250, bld: 'fact', kinds: ['mortar', 'raider'], hpMul: 1.20 }, // retrofits existing units
+};
+RTS.TURRET_UP = { cost: 100, mul: 1.5 };   // per-turret: +50% dmg / rng / hp
 
 // event kinds (wire format uses the index)
 RTS.EV = { SHOT: 0, HIT: 1, BOOM: 2, BIGBOOM: 3, DEPOSIT: 4, BUILT: 5, PROMOTE: 6 };
@@ -95,6 +120,11 @@ RTS.STR_EN = {
   gatherIdle: 'Send idle workers to mine',
   noIdle: 'No idle workers',
   sentToMine: 'Idle workers → mining',
+  paused: 'PAUSED',
+  resume: 'Resume',
+  restartGame: 'Restart',
+  quitToMenu: 'Quit to menu',
+  pauseMpNote: 'The game keeps running in online matches',
   needCrystals: 'Not enough crystals',
   atCap: 'Unit cap reached',
   invalidSpot: 'Cannot build there',
@@ -102,14 +132,32 @@ RTS.STR_EN = {
   stop: 'Stop',
   howTitle: 'How to play',
   language: 'Language',
+  diffLabel: 'AI',
+  diffEasy: 'EASY', diffNormal: 'NORMAL', diffHard: 'HARD',
+  upDrill: 'Mining Drill', upStims: 'Combat Stims', upAlloys: 'Hardened Alloys', upTurret: 'Overcharge',
+  owned: 'OWNED',
+  upgradeBought: 'Upgrade purchased',
+  autoAssist: 'Auto-assist',
+  rallySet: 'Rally point set',
+  upDescr: {
+    drill: 'Workers carry 12 crystals instead of 8.',
+    stims: 'Marines and brutes deal +10% damage.',
+    alloys: 'Mortars and raiders get +20% max hp (existing units too).',
+    turret: 'This turret: +50% damage, range and hp.',
+  },
   how: [
-    'Left-drag: select units. Right-click: move / attack / harvest.',
-    'A + left-click: attack-move. S: stop. Esc: cancel.',
-    'Workers harvest crystals and construct buildings — select several and place a building so they all build it together (faster).',
-    'G (or the ⛏ button): send every idle worker back to mining.',
-    'HQ trains workers. Barracks: marines & brutes. Factory: mortars & raiders.',
+    'Left-drag: select units. Shift-click / Shift-drag adds to the selection. Right-click: move / attack / harvest.',
+    'A + left-click: attack-move. S: stop. Esc: cancel selection / pause menu.',
+    'Workers harvest crystals and construct buildings — select several and place a building so they all build it together (faster). Right-click an unfinished building to send workers to it.',
+    'G (or the ⛏ button): send every idle worker back to mining. Workers spread out automatically — max 2 per crystal.',
+    'F (or the Ⓐ button) toggles auto-assist on workers: when idle they join the nearest construction site or find a free crystal by themselves.',
+    'HQ trains workers. Barracks: marines & brutes. Factory: mortars & raiders. Q/W/E are train hotkeys on a selected building.',
+    'Rally points: right-click with a production building selected. Rally the HQ on a crystal and new workers start mining it automatically.',
+    'Upgrades: select the HQ (Mining Drill), Barracks (Combat Stims), Factory (Hardened Alloys) or a Turret (Overcharge) and buy from the command card.',
     'Combat units earn ranks: 3 kills → +15% dmg +20% hp, 8 kills → +30% / +40%.',
-    'Arrows / edge / middle-drag pan the camera. Wheel zooms. M mutes.',
+    'The minimap shows crystal fields as green dots — click or drag it to pan. Arrows / edge / middle-drag pan too. Wheel zooms. M mutes.',
+    'Skirmish: pick the AI difficulty (EASY / NORMAL / HARD) under the Skirmish button.',
+    'Touch: tap to select, tap to order, long-press for attack-move, two fingers to pan/zoom.',
     'Destroy every enemy HQ to win.',
   ],
   names: {
@@ -157,6 +205,11 @@ RTS.STR_DA = {
   gatherIdle: 'Send ledige workers i minen',
   noIdle: 'Ingen ledige workers',
   sentToMine: 'Ledige workers → høster',
+  paused: 'PAUSE',
+  resume: 'Fortsæt',
+  restartGame: 'Genstart',
+  quitToMenu: 'Til menuen',
+  pauseMpNote: 'Spillet fortsætter i online-kampe',
   needCrystals: 'Ikke nok krystaller',
   atCap: 'Enhedsloftet er nået',
   invalidSpot: 'Kan ikke bygge dér',
@@ -164,14 +217,32 @@ RTS.STR_DA = {
   stop: 'Stop',
   howTitle: 'Sådan spiller du',
   language: 'Sprog',
+  diffLabel: 'AI',
+  diffEasy: 'LET', diffNormal: 'NORMAL', diffHard: 'SVÆR',
+  upDrill: 'Mining Drill', upStims: 'Combat Stims', upAlloys: 'Hardened Alloys', upTurret: 'Overcharge',
+  owned: 'EJET',
+  upgradeBought: 'Opgradering købt',
+  autoAssist: 'Auto-hjælp',
+  rallySet: 'Samlingspunkt sat',
+  upDescr: {
+    drill: 'Workers bærer 12 krystaller i stedet for 8.',
+    stims: 'Marines og brutes giver +10% skade.',
+    alloys: 'Mortars og raiders får +20% max hp (også eksisterende enheder).',
+    turret: 'Denne turret: +50% skade, rækkevidde og hp.',
+  },
   how: [
-    'Venstre-træk: vælg enheder. Højreklik: flyt / angrib / høst.',
-    'A + venstreklik: angrebsmarch. S: stop. Esc: annullér.',
-    'Workers høster krystaller og bygger — vælg flere og placér en bygning, så bygger de den sammen (hurtigere).',
-    'G (eller ⛏-knappen): send alle ledige workers tilbage i minen.',
-    'HQ træner workers. Barracks: marines & brutes. Factory: mortars & raiders.',
+    'Venstre-træk: vælg enheder. Shift-klik / Shift-træk føjer til valget. Højreklik: flyt / angrib / høst.',
+    'A + venstreklik: angrebsmarch. S: stop. Esc: annullér valg / pausemenu.',
+    'Workers høster krystaller og bygger — vælg flere og placér en bygning, så bygger de den sammen (hurtigere). Højreklik på en ufærdig bygning for at sende workers derhen.',
+    'G (eller ⛏-knappen): send alle ledige workers tilbage i minen. Workers fordeler sig selv — max 2 pr. krystal.',
+    'F (eller Ⓐ-knappen) slår auto-hjælp til på workers: når de er ledige, hjælper de selv med nærmeste byggeplads eller finder en fri krystal.',
+    'HQ træner workers. Barracks: marines & brutes. Factory: mortars & raiders. Q/W/E er træn-genveje på en valgt bygning.',
+    'Samlingspunkter: højreklik med en valgt produktionsbygning. Sæt HQ’ets samlingspunkt på en krystal, så høster nye workers den automatisk.',
+    'Opgraderinger: vælg HQ (Mining Drill), Barracks (Combat Stims), Factory (Hardened Alloys) eller en Turret (Overcharge) og køb på kommandokortet.',
     'Kampenheder får rang: 3 drab → +15% skade +20% hp, 8 drab → +30% / +40%.',
-    'Pile / kanter / midterklik-træk panorerer. Hjul zoomer. M slår lyden fra.',
+    'Minimappet viser krystalfelter som grønne prikker — klik eller træk i det for at panorere. Pile / kanter / midterklik-træk panorerer også. Hjul zoomer. M slår lyden fra.',
+    'Skirmish: vælg AI-sværhedsgrad (LET / NORMAL / SVÆR) under Skirmish-knappen.',
+    'Touch: tryk for at vælge og give ordrer, langt tryk = angrebsmarch, to fingre panorerer/zoomer.',
     'Ødelæg alle fjendens HQ’er for at vinde.',
   ],
   names: {

@@ -84,7 +84,7 @@ body {
   letter-spacing: .03em;
 }
 #card { display: flex; flex-wrap: wrap; gap: .35rem; }
-#card:empty + #sel-info { display: none; }
+#sel-info:has(+ #card:empty) { display: none; } /* #sel-info precedes #card in the DOM */
 .cbtn {
   background: var(--card);
   border: 1px solid var(--line); border-radius: 8px;
@@ -92,8 +92,12 @@ body {
   padding: .45rem .55rem; cursor: pointer;
   display: flex; align-items: center; gap: .4rem;
 }
-.cbtn:hover { border-color: var(--cyan); color: var(--cyan); }
+.cbtn:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
+.cbtn.active { border-color: var(--green); color: var(--green); }
+.cbtn:disabled { opacity: .55; cursor: default; }
 .cbtn .cost { color: var(--green); font-weight: 400; font-size: .75rem; }
+/* ●A badge in sel-info while selected workers run auto-assist */
+.abadge { color: var(--green); font-weight: 700; }
 .cbtn .key {
   color: var(--dim); font-weight: 400; font-size: .7rem;
   border: 1px solid var(--line); border-radius: 4px; padding: 0 .25rem;
@@ -147,6 +151,15 @@ body {
   font-size: .8rem; padding: .45rem .8rem;
 }
 .mbtn.lang:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: none; }
+/* AI difficulty row under the Skirmish button */
+.diffrow { display: flex; align-items: center; gap: .45rem; }
+.diffrow span {
+  color: var(--dim); font-size: .75rem; font-weight: 700; letter-spacing: .08em;
+}
+.diffrow .tbtn {
+  flex: 1; padding: .35rem .3rem;
+  font-size: .78rem; font-weight: 700; letter-spacing: .06em;
+}
 .joinrow { display: flex; gap: .5rem; }
 .joinrow .mbtn { flex: 1; border-color: var(--magenta); color: var(--magenta); }
 .joinrow .mbtn:hover { box-shadow: 0 0 24px rgba(255, 40, 180, .4); }

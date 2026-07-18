@@ -115,6 +115,9 @@ RTS.input = (() => {
   function onKeyDown(e) {
     if (game.mode === 'menu') return;
     keys.add(e.code);
+    // while paused only Escape may act (unpause); modifier combos (Ctrl+F etc.)
+    // belong to the browser, not the game
+    if ((game.paused && e.code !== 'Escape') || e.ctrlKey || e.metaKey || e.altKey) return;
     // command-card hotkeys (train buttons etc., physical codes like KeyQ)
     if (game.cardHotkeys && game.cardHotkeys[e.code]) {
       U.sfx.click();
@@ -132,9 +135,11 @@ RTS.input = (() => {
         break;
       }
       case 'Escape':
-        if (game.placing) game.placing = null;
+        if (game.paused) { if (game.togglePause) game.togglePause(); }
+        else if (game.placing) game.placing = null;
         else if (attackMod) setAttackMod(false);
-        else { game.sel.clear(); game.onSelChange(); }
+        else if (game.sel.size) { game.sel.clear(); game.onSelChange(); }
+        else if (game.togglePause) game.togglePause();
         break;
     }
   }
@@ -202,6 +207,7 @@ RTS.input = (() => {
 
     if (blds.length && !units.length) { // set rally
       game.sendCmd({ c: 'rally', ids: blds.map((e) => e.id), x: w.x, y: w.y, tid: target && target.kind === 'crystal' ? target.id : 0 });
+      game.toast(RTS.STR.rallySet);
       U.sfx.order();
       return;
     }

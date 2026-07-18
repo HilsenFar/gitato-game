@@ -139,7 +139,7 @@ RTS.render = (() => {
       out.push({
         id: e[0], kind: KL[e[1]], owner: e[2], x, y, hp: e[5],
         face: face * Math.PI / 180, flags: e[7], qlen: e[8], prog: e[9], qkind: e[10],
-        vet: e[11] || 0,
+        vet: e[11] || 0, rx: e[12] || 0, ry: e[13] || 0,
       });
     }
     return out;
@@ -189,7 +189,7 @@ RTS.render = (() => {
       case EV.BIGBOOM:
         ring(x, y, 70, '#ff5050'); spark(x, y, 24, '#ff8850'); S.bigboom(); break;
       case EV.DEPOSIT:
-        floatText(x, y, '+' + C.CARRY, '#50dc78'); S.deposit(); break;
+        floatText(x, y, '+' + (ev[3] || C.CARRY), '#50dc78'); S.deposit(); break;
       case EV.BUILT:
         ring(x, y, 44, '#00ffdc'); S.built(); break;
       case EV.PROMOTE:
@@ -235,15 +235,26 @@ RTS.render = (() => {
     const S3 = RTS.scene3d;
     S3.updateCamera(st.cam, w, h);
 
-    const list = ents().filter(drawable);
+    const all = ents();
+    const list = all.filter(drawable);
     const projs = (view.next.p || []).filter((p) => exploredAt(p[0], p[1]));
     S3.render(list, projs, st.placing, st.sel);
+    const techMask = view.next.tech || [0, 0];
 
     // ---- overlay: health bars ----
     for (const e of list) {
       const k = K[e.kind];
       let maxhp = e.kind === 'crystal' ? C.CRYSTAL_AMOUNT : k.hp;
-      if (e.vet) maxhp = Math.round(k.hp * RTS.VET.hp[e.vet]);
+      if (!k.bld && e.kind !== 'crystal') {
+        // mirror sim: base * veterancy * Hardened Alloys
+        let hp = k.hp;
+        if (e.vet) hp *= RTS.VET.hp[e.vet];
+        const AL = RTS.TECH.alloys;
+        if (e.owner < 2 && AL.kinds.includes(e.kind) && (techMask[e.owner] & AL.bit)) hp *= AL.hpMul;
+        maxhp = Math.round(hp);
+      } else if (e.kind === 'turret' && (e.flags & 16)) {
+        maxhp = Math.round(k.hp * RTS.TURRET_UP.mul); // overcharged turret
+      }
       const frac = U.clamp(e.hp / maxhp, 0, 1);
       const selected = st.sel.has(e.id);
       const constructing = (e.flags & 2) !== 0;
@@ -285,6 +296,39 @@ RTS.render = (() => {
       }
     }
 
+    // ---- overlay: overcharged turrets get a gold ground ring ----
+    const wpp = Math.max(0.4, S3.worldPerPixel());
+    for (const e of list) {
+      if (e.kind !== 'turret' || !(e.flags & 16)) continue;
+      const s = S3.worldToScreen(e.x, e.y, 1);
+      if (s.behind) continue;
+      ctx.strokeStyle = 'rgba(255,216,104,.85)';
+      ctx.lineWidth = 2;
+      const r = 22 / wpp;
+      ctx.beginPath(); ctx.ellipse(s.x, s.y, r, r * 0.62, 0, 0, 7); ctx.stroke();
+    }
+
+    // ---- overlay: rally flag for selected own production buildings ----
+    for (const e of list) {
+      if (!st.sel.has(e.id) || e.owner !== myPlayer) continue;
+      if (!K[e.kind].bld || !K[e.kind].trains || (e.flags & 2)) continue;
+      if (!e.rx && !e.ry) continue;
+      const a = S3.worldToScreen(e.x, e.y, 2);
+      const b = S3.worldToScreen(e.rx, e.ry, 2);
+      if (a.behind || b.behind) continue;
+      ctx.strokeStyle = 'rgba(255,216,104,.55)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#ffd868';
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, b.y - 15); ctx.stroke();
+      ctx.fillStyle = '#ffd868';
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y - 15); ctx.lineTo(b.x + 10, b.y - 11); ctx.lineTo(b.x, b.y - 7);
+      ctx.closePath(); ctx.fill();
+    }
+
     // ---- overlay: particles ----
     for (const p of particles) {
       const a = p.life / p.max;
@@ -319,10 +363,10 @@ RTS.render = (() => {
       ctx.setLineDash([]);
     }
 
-    drawMinimap(st, list, w, h);
+    drawMinimap(st, list, all, w, h);
   }
 
-  function drawMinimap(st, list, w, h) {
+  function drawMinimap(st, list, all, w, h) {
     const S = mmCv.width;
     mmCtx.setTransform(1, 0, 0, 1, 0, 0);
     mmCtx.imageSmoothingEnabled = false;
@@ -338,6 +382,12 @@ RTS.render = (() => {
     mmCtx.globalAlpha = 0.85;
     mmCtx.drawImage(fogCv, 0, 0, map.W, map.H, 0, 0, S, S);
     mmCtx.globalAlpha = 1;
+    // crystal fields stay visible through the fog so new clusters can be found
+    mmCtx.fillStyle = RTS.NCOL.main;
+    for (const e of all) {
+      if (e.kind !== 'crystal') continue;
+      mmCtx.fillRect(e.x * sc - 1.5, e.y * sc - 1.5, 3, 3);
+    }
     // viewport trapezoid (project the 4 screen corners onto the ground)
     const cs = [[0, 0], [w, 0], [w, h], [0, h]].map(([x, y]) => RTS.scene3d.screenToWorld(x, y));
     mmCtx.strokeStyle = '#ffffff';

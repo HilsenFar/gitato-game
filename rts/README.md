@@ -32,6 +32,28 @@ on a selected production building), and touch controls are all in.
 - **Smarter skirmish bot** — builds base turrets, expands to a new HQ when its
   crystal line runs dry, mixes raiders into its waves and sends raider squads
   after your worker line.
+- **AI difficulty** — EASY / NORMAL / HARD row under the Skirmish button
+  (persisted in `localStorage['rts-diff']`). Easy never harasses or expands,
+  fields a small army and only attacks after ~4 minutes; Normal is a softened
+  version of the old bot (smaller wave cap, rare harass); Hard keeps the full
+  aggression, recalls its army to defend its base and buys the Mining Drill /
+  Combat Stims upgrades. All knobs live in `RTS.AI_DIFF` in `js/const.js`.
+- **Building upgrades** — bought from the command card with a single building
+  selected: HQ → *Mining Drill* (worker carry 8→12), Barracks → *Combat Stims*
+  (marines/brutes +10% dmg), Factory → *Hardened Alloys* (mortars/raiders +20%
+  max hp, retrofits existing units), Turret → *Overcharge* (per-turret +50%
+  dmg/range/hp, shown as a gold ring). Player techs are a bitmask
+  (`s.tech[p]`, `snap.tech`); Overcharge is snapshot flag bit 16.
+- **Auto-assist workers** — the Ⓐ button / `F` toggles auto on selected
+  workers (flag bit 32): whenever they go idle they join the nearest own
+  construction site, or pick a crystal by themselves. Harvest targeting is
+  smart everywhere: max 2 workers per crystal, extra workers spill over to
+  neighbouring crystals, and depleted-crystal retargeting works the same way.
+- **Visible rally points** — right-click with a production building selected
+  sets its rally (toast + gold flag marker in the overlay; rally coords ride
+  in the snapshot entity row). Rallying the HQ onto a crystal makes new
+  workers mine it automatically. The minimap always shows crystal fields as
+  green dots so new clusters are findable through the fog.
 - **Language** — UI is English by default; an EN/DA toggle in the main menu
   switches to Danish (persisted in `localStorage['rts-lang']`).
 

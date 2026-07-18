@@ -39,12 +39,29 @@
 
 <div id="toast"></div>
 
+<!-- pause (ESC / ☰) -->
+<div id="pause" class="panel">
+  <h1 id="pause-title">PAUSED</h1>
+  <div class="btns">
+    <button id="btn-resume" class="mbtn">Resume</button>
+    <button id="btn-pause-restart" class="mbtn">Restart</button>
+    <button id="btn-pause-quit" class="mbtn">Quit to menu</button>
+  </div>
+  <p id="pause-note" class="tag"></p>
+</div>
+
 <!-- main menu -->
 <div id="menu" class="panel">
   <h1>GITATO<span> COMMAND</span></h1>
   <p class="tag">A neon micro-RTS. Destroy the enemy HQ.</p>
   <div class="btns">
     <button id="btn-skirmish" class="mbtn">Skirmish vs AI</button>
+    <div class="diffrow">
+      <span id="diff-label">AI</span>
+      <button id="btn-diff-easy" class="tbtn">EASY</button>
+      <button id="btn-diff-normal" class="tbtn active">NORMAL</button>
+      <button id="btn-diff-hard" class="tbtn">HARD</button>
+    </div>
     <button id="btn-host" class="mbtn">Host Online Game</button>
     <div class="joinrow">
       <input id="join-code" maxlength="6" placeholder="CODE" autocomplete="off" spellcheck="false">
@@ -57,7 +74,7 @@
     <summary>How to play</summary>
     <ul id="how-list"></ul>
   </details>
-  <p class="foot"><a href="../">← gitato.net</a></p>
+  <p class="foot"><a href="https://gitato.net/">← gitato.net</a></p>
 </div>
 
 <!-- game over -->

@@ -47,6 +47,7 @@
 
   function toMenu() {
     stopGame();
+    paused = false; game.paused = false;
     game.mode = 'menu';
     $('hud').classList.remove('show');
     $('menu-msg').textContent = '';
@@ -54,6 +55,7 @@
   }
 
   function stopGame() {
+    paused = false; game.paused = false; // every teardown path must resync both pause flags
     if (simTimer) { clearInterval(simTimer); simTimer = null; }
     if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
     RTS.net.destroy();
@@ -68,7 +70,43 @@
     stopGame();
     const seed = (Math.random() * 0xffffffff) >>> 0;
     beginMatch(vsAi ? 'skirmish' : 'host', 0, seed);
-    if (vsAi) game.ai = RTS.ai.create(1);
+    if (vsAi) game.ai = RTS.ai.create(1, game.diff); // difficulty from the menu row
+  }
+
+  // authoritative loop (setInterval so the sim survives a hidden tab)
+  function startSimLoop() {
+    if (simTimer) return;
+    simTimer = setInterval(() => {
+      const cmds = game.pending.concat(game.remote);
+      game.pending = []; game.remote = [];
+      if (game.ai) cmds.push(...RTS.ai.think(game.ai, game.sim));
+      RTS.sim.step(game.sim, cmds);
+      if (game.sim.tick % C.SNAP_EVERY === 0) {
+        const snap = RTS.sim.snapshot(game.sim);
+        RTS.render.view.push(snap);
+        if (game.mode === 'host') RTS.net.send({ c: 'snap', s: snap });
+        checkOver(snap);
+      }
+    }, C.TICK_MS);
+  }
+
+  // ---- pause (ESC / ☰) — only skirmish can freeze the sim; online keeps running ----
+  let paused = false;
+  function setPaused(on) {
+    if (game.mode === 'menu') return;
+    if (game.overShown) return; // ESC/burger must not replace the results panel after game over
+    if (paused === on) return;
+    paused = on;
+    game.paused = on;
+    if (on) {
+      $('btn-pause-restart').style.display = game.mode === 'skirmish' ? '' : 'none';
+      $('pause-note').textContent = game.mode === 'skirmish' ? '' : STR.pauseMpNote;
+      show('pause');
+      if (game.mode === 'skirmish' && simTimer) { clearInterval(simTimer); simTimer = null; }
+    } else {
+      show(null);
+      if (game.mode === 'skirmish') startSimLoop();
+    }
   }
 
   function beginMatch(mode, myPlayer, seed) {
@@ -99,19 +137,7 @@
           if (performance.now() - lastPeerMsg > 10000) onPeerGone();
         }, 2000);
       }
-      // authoritative loop (setInterval so the sim survives a hidden tab)
-      simTimer = setInterval(() => {
-        const cmds = game.pending.concat(game.remote);
-        game.pending = []; game.remote = [];
-        if (game.ai) cmds.push(...RTS.ai.think(game.ai, game.sim));
-        RTS.sim.step(game.sim, cmds);
-        if (game.sim.tick % C.SNAP_EVERY === 0) {
-          const snap = RTS.sim.snapshot(game.sim);
-          RTS.render.view.push(snap);
-          if (game.mode === 'host') RTS.net.send({ c: 'snap', s: snap });
-          checkOver(snap);
-        }
-      }, C.TICK_MS);
+      startSimLoop();
     } else {
       lastPeerMsg = performance.now();
       pingTimer = setInterval(() => {
@@ -187,6 +213,7 @@
   }
 
   function showGameOver(won, subtitle, draw) {
+    paused = false; game.paused = false;
     $('over-title').textContent = draw ? STR.draw : won ? STR.victory : STR.defeat;
     $('over-title').style.color = won && !draw ? RTS.PCOL[game.myPlayer].main : '#ff5050';
     $('over-sub').textContent = subtitle || '';
@@ -200,6 +227,7 @@
     const card = $('card');
     card.innerHTML = '';
     game.cardHotkeys = {};
+    game.autoBtn = null; game.autoIds = [];
     const sel = RTS.input.selEnts();
     const info = $('sel-info');
     if (!sel.length) { info.textContent = ''; return; }
@@ -208,13 +236,19 @@
     for (const e of sel) byKind[e.kind] = (byKind[e.kind] || 0) + 1;
     info.textContent = Object.entries(byKind)
       .map(([k, n]) => (n > 1 ? n + '× ' : '') + STR.names[k]).join(', ');
+    // ●A badge appears while selected workers have auto-assist on
+    const badge = document.createElement('span');
+    badge.id = 'auto-badge'; badge.className = 'abadge';
+    info.appendChild(badge);
 
-    const addBtn = (label, cost, fn, cls) => {
+    const addBtn = (label, cost, fn, cls, disabled) => {
       const b = document.createElement('button');
       b.className = 'cbtn' + (cls ? ' ' + cls : '');
       b.innerHTML = label + (cost ? `<span class="cost">${cost}</span>` : '');
-      b.addEventListener('click', (ev) => { ev.stopPropagation(); U.sfx.click(); fn(); });
+      if (disabled) b.disabled = true;
+      else b.addEventListener('click', (ev) => { ev.stopPropagation(); U.sfx.click(); fn(); });
       card.appendChild(b);
+      return b;
     };
 
     const hasWorker = sel.some((e) => e.kind === 'worker');
@@ -225,6 +259,15 @@
       addBtn('✋ ' + STR.stop, 0, () => RTS.input.sendToSel('stop'));
     }
     if (hasWorker) {
+      // AUTO: toggle auto-assist on the selected workers (hotkey F)
+      const workerIds = sel.filter((e) => e.kind === 'worker').map((e) => e.id);
+      const fn = () => {
+        game.sendCmd({ c: 'auto', ids: workerIds, on: !allWorkersAuto(workerIds) });
+      };
+      game.autoBtn = addBtn('Ⓐ ' + STR.autoAssist + ' <span class="key">F</span>', 0, fn);
+      game.autoIds = workerIds;
+      if (allWorkersAuto(workerIds)) game.autoBtn.classList.add('active');
+      game.cardHotkeys.KeyF = fn;
       for (const bk of ['rax', 'fact', 'turret', 'hq']) {
         addBtn('🔧 ' + STR.names[bk], K[bk].cost, () => {
           game.placing = { kind: bk, tx: 0, ty: 0, valid: false };
@@ -246,6 +289,49 @@
         addBtn('▲ ' + STR.names[uk] + (key ? ` <span class="key">${key.slice(3)}</span>` : ''), K[uk].cost, fn);
         if (key) game.cardHotkeys[key] = fn;
       });
+    }
+    // upgrades on a single selected finished building
+    if (b) buildUpgradeButtons(addBtn, b);
+  }
+
+  // count selected workers whose snapshot row carries the auto flag (bit 32)
+  function autoWorkerCount(ids) {
+    const snap = RTS.render.view.next;
+    if (!snap || !ids.length) return 0;
+    const set = new Set(ids);
+    let n = 0;
+    for (const e of snap.e) if (set.has(e[0]) && (e[7] & 32)) n++;
+    return n;
+  }
+  const allWorkersAuto = (ids) => ids.length > 0 && autoWorkerCount(ids) === ids.length;
+
+  // player-tech + per-turret upgrade buttons (OWNED state once bought)
+  function buildUpgradeButtons(addBtn, b) {
+    const snap = RTS.render.view.next;
+    const myTech = (snap && snap.tech) ? snap.tech[game.myPlayer] : 0;
+    const buy = (cost, cmd) => () => {
+      const s2 = RTS.render.view.next;
+      if (s2 && s2.res[game.myPlayer] < cost) { U.sfx.error(); game.toast(STR.needCrystals); return; }
+      game.sendCmd(cmd);
+      game.toast(STR.upgradeBought);
+      setTimeout(buildCommandCard, 350); // refresh to OWNED once the snapshot lands
+    };
+    const techFor = { hq: 'drill', rax: 'stims', fact: 'alloys' };
+    const key = techFor[b.kind];
+    if (key) {
+      const t = RTS.TECH[key];
+      const label = { drill: STR.upDrill, stims: STR.upStims, alloys: STR.upAlloys }[key];
+      const owned = (myTech & t.bit) !== 0;
+      const btn = owned
+        ? addBtn('★ ' + label, STR.owned, null, '', true)
+        : addBtn('★ ' + label, t.cost, buy(t.cost, { c: 'upgrade', tid: b.id, tech: key }));
+      btn.title = STR.upDescr[key];
+    } else if (b.kind === 'turret') {
+      const owned = (b.flags & 16) !== 0;
+      const btn = owned
+        ? addBtn('★ ' + STR.upTurret, STR.owned, null, '', true)
+        : addBtn('★ ' + STR.upTurret, RTS.TURRET_UP.cost, buy(RTS.TURRET_UP.cost, { c: 'upgrade', tid: b.id, tech: 'turret' }));
+      btn.title = STR.upDescr.turret;
     }
   }
 
@@ -269,6 +355,13 @@
     const mineBtn = $('btn-mine');
     mineBtn.textContent = idle ? '⛏' + idle : '⛏';
     mineBtn.classList.toggle('has-idle', idle > 0);
+    // live auto-assist state (the command card is not rebuilt per snapshot)
+    if (game.autoBtn && game.autoIds && game.autoIds.length) {
+      const n = autoWorkerCount(game.autoIds);
+      game.autoBtn.classList.toggle('active', n === game.autoIds.length);
+      const badge = $('auto-badge');
+      if (badge) badge.textContent = n > 0 ? ' ●A' : '';
+    }
   }
 
   // ---------- boot ----------
@@ -278,6 +371,27 @@
     RTS.input.init(game, cvGame, cvMm);
 
     $('btn-skirmish').addEventListener('click', () => { U.audio(); U.sfx.click(); startLocal(true); });
+
+    // AI difficulty row (skirmish only; persisted in localStorage['rts-diff'])
+    const diffBtns = { easy: $('btn-diff-easy'), normal: $('btn-diff-normal'), hard: $('btn-diff-hard') };
+    const setDiff = (name) => {
+      game.diff = name;
+      try { localStorage.setItem('rts-diff', name); } catch (e) { /* storage blocked */ }
+      for (const [k2, b2] of Object.entries(diffBtns)) b2.classList.toggle('active', k2 === name);
+    };
+    for (const k2 of Object.keys(diffBtns)) {
+      diffBtns[k2].addEventListener('click', () => { U.sfx.click(); setDiff(k2); });
+    }
+    let diff0 = 'normal';
+    try {
+      const v = localStorage.getItem('rts-diff');
+      if (RTS.AI_DIFF[v]) diff0 = v;
+    } catch (e) { /* storage blocked */ }
+    setDiff(diff0);
+    $('diff-label').textContent = STR.diffLabel;
+    diffBtns.easy.textContent = STR.diffEasy;
+    diffBtns.normal.textContent = STR.diffNormal;
+    diffBtns.hard.textContent = STR.diffHard;
     $('btn-host').addEventListener('click', () => { U.audio(); U.sfx.click(); show('menu'); hostOnline(); });
     $('btn-join').addEventListener('click', () => {
       U.audio(); U.sfx.click();
@@ -285,7 +399,11 @@
       if (code.length >= 3) joinOnline(code);
     });
     $('join-code').addEventListener('keydown', (e) => { if (e.code === 'Enter') $('btn-join').click(); });
-    $('btn-menu').addEventListener('click', () => { U.sfx.click(); toMenu(); });
+    game.togglePause = () => setPaused(!paused);
+    $('btn-menu').addEventListener('click', () => { U.sfx.click(); if (game.mode === 'menu') return; setPaused(true); });
+    $('btn-resume').addEventListener('click', () => { U.sfx.click(); setPaused(false); });
+    $('btn-pause-restart').addEventListener('click', () => { U.sfx.click(); startLocal(true); }); // stopGame() resets paused + game.paused
+    $('btn-pause-quit').addEventListener('click', () => { U.sfx.click(); toMenu(); });
     $('btn-mute').addEventListener('click', () => {
       $('btn-mute').textContent = U.toggleMute() ? '🔇' : '🔊';
     });
@@ -314,6 +432,10 @@
     $('btn-mute').title = STR.mute + ' (M)';
     $('btn-menu').title = STR.backToMenu;
     $('join-code').placeholder = STR.codePH;
+    $('pause-title').textContent = STR.paused;
+    $('btn-resume').textContent = STR.resume;
+    $('btn-pause-restart').textContent = STR.restartGame;
+    $('btn-pause-quit').textContent = STR.quitToMenu;
 
     // EN/DA toggle (persisted; English is the default)
     const langBtn = $('btn-lang');

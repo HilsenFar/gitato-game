@@ -250,6 +250,13 @@ RTS.scene3d = (() => {
         scene.add(m.group);
         meshes.set(e.id, m);
       }
+      // overcharged turrets get a gold ring at the base (snapshot flag 16)
+      if (e.kind === 'turret' && (e.flags & 16) && !m.upRing) {
+        m.upRing = new THREE.Mesh(new THREE.RingGeometry(16, 19.5, 24), mats.vetGold);
+        m.upRing.rotation.x = -Math.PI / 2;
+        m.upRing.position.y = 1.4;
+        m.group.add(m.upRing);
+      }
       // rank-2 veterans get a subtle gold ring at the base of the mesh
       if ((e.vet || 0) >= 2 && !m.vetRing) {
         const rad = (K[e.kind].r || 10) + 4;
