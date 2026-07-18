@@ -124,6 +124,7 @@ RTS.input = (() => {
     switch (e.code) {
       case 'KeyA': if (game.sel.size && !game.placing) setAttackMod(true); break;
       case 'KeyS': sendToSel('stop'); break;
+      case 'KeyG': gatherIdle(); break;
       case 'KeyM': {
         const m = U.toggleMute();
         const btn = document.getElementById('btn-mute');
@@ -227,6 +228,12 @@ RTS.input = (() => {
     sendToSel('amove', { x: w.x, y: w.y });
   }
 
+  // send every idle worker back to the nearest crystal (host resolves who is idle)
+  function gatherIdle() {
+    game.sendCmd({ c: 'gather' });
+    U.sfx.order();
+  }
+
   // ---- placement ----
   function placingValid(kind, tx, ty) {
     const k = K[kind], map = game.map;
@@ -253,14 +260,16 @@ RTS.input = (() => {
   function tryPlace(sx, sy) {
     const p = game.placing;
     if (!p) return;
-    const worker = selEnts().find((e) => e.kind === 'worker');
-    if (!worker) { game.placing = null; return; }
+    // every selected worker helps build → the more you bring, the faster it goes.
+    // placer first so it's the one that survives the footprint deduction.
+    const workers = selEnts().filter((e) => e.kind === 'worker');
+    if (!workers.length) { game.placing = null; return; }
     if (!p.valid) { U.sfx.error(); game.toast(RTS.STR.invalidSpot); return; }
     const snap = RTS.render.view.next;
     if (snap && snap.res[game.myPlayer] < K[p.kind].cost) {
       U.sfx.error(); game.toast(RTS.STR.needCrystals); game.placing = null; return;
     }
-    game.sendCmd({ c: 'build', ids: [worker.id], kind: p.kind, x: p.tx, y: p.ty });
+    game.sendCmd({ c: 'build', ids: workers.map((e) => e.id), kind: p.kind, x: p.tx, y: p.ty });
     U.sfx.order();
     game.placing = null;
   }
@@ -369,5 +378,5 @@ RTS.input = (() => {
   }
 
   const getDrag = () => drag;
-  return { init, update, getDrag, selEnts, setAttackMod, issueAttackMove, sendToSel };
+  return { init, update, getDrag, selEnts, setAttackMod, issueAttackMove, sendToSel, gatherIdle };
 })();

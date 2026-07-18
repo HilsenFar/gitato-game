@@ -184,15 +184,28 @@ RTS.sim = (() => {
         break;
       }
       case 'build': {
-        // one worker places a new site (crystals deducted now)
-        const e = mine((cmd.ids || [])[0]);
+        // first selected worker places the site; ALL selected workers build it
+        // together, so the site finishes faster the more workers you bring.
+        const ids = cmd.ids || [];
+        const placer = mine(ids[0]);
         const k = K[cmd.kind];
-        if (!e || e.kind !== 'worker' || !k || !k.bld) break;
+        if (!placer || placer.kind !== 'worker' || !k || !k.bld) break;
         if (s.res[cmd.p] < k.cost || !footprintFree(s, cmd.kind, cmd.x, cmd.y)) break;
         s.res[cmd.p] -= k.cost;
         const b = placeBuilding(s, cmd.kind, cmd.p, cmd.x, cmd.y);
-        e.state = 'tobuild'; e.buildId = b.id; e.targetId = 0;
-        pathToEntity(s, e, b);
+        for (const id of ids) {
+          const e = mine(id);
+          if (e && e.kind === 'worker') { e.state = 'tobuild'; e.buildId = b.id; e.targetId = 0; pathToEntity(s, e, b); }
+        }
+        break;
+      }
+      case 'gather': {
+        // send every idle worker of this player to the nearest crystal
+        // (one-click "put the rest of my workers back to mining")
+        for (const e of s.ents) {
+          if (e.owner !== cmd.p || e.kind !== 'worker' || e.state !== 'idle') continue;
+          orderHarvestNearest(s, e);
+        }
         break;
       }
       case 'repair': { // send workers to finish an unfinished friendly site
@@ -636,7 +649,7 @@ RTS.sim = (() => {
 
   // ---- compact snapshot for the wire / renderer ----
   // ent row: [id, kindIdx, owner, x, y, hp, faceDeg, flags, qlen, progPct, qKindIdx, vet]
-  // flags: 1 carrying, 2 constructing, 4 muzzle flash
+  // flags: 1 carrying, 2 constructing, 4 muzzle flash, 8 idle worker
   // INVARIANT: new fields are only ever APPENDED at the end (render.js reads by index)
   function snapshot(s) {
     const e = [];
@@ -646,6 +659,7 @@ RTS.sim = (() => {
       if (o.carry) flags |= 1;
       if (k.bld && o.prog < 1) { flags |= 2; prog = (o.prog * 100) | 0; }
       if (o.flash > 0) flags |= 4;
+      if (o.kind === 'worker' && o.state === 'idle') flags |= 8; // idle-worker (for the MINE button count)
       if (k.bld && o.prog >= 1 && o.queue.length) {
         qlen = o.queue.length;
         const q = o.queue[0];

@@ -58,6 +58,8 @@ body {
 }
 .tbtn:hover, .tbtn.active { border-color: var(--cyan); color: var(--cyan); }
 #btn-amove.active { border-color: var(--orange); color: var(--orange); }
+/* MINE button glows green while idle workers are waiting to be put to work */
+#btn-mine.has-idle { border-color: var(--green, #50dc78); color: var(--green, #50dc78); }
 
 #minimap {
   position: fixed; left: 10px; bottom: 10px;

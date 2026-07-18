@@ -249,11 +249,26 @@
     }
   }
 
+  function idleWorkerCount() {
+    const snap = RTS.render.view.next;
+    if (!snap) return 0;
+    let n = 0;
+    for (const e of snap.e) {
+      // row: [id, kind, owner, ...flags@7]; flag 8 = idle worker
+      if (e[2] === game.myPlayer && (e[7] & 8)) n++;
+    }
+    return n;
+  }
+
   function updateHudBar() {
     const snap = RTS.render.view.next;
     if (!snap) return;
     $('hud-res').textContent = '◆ ' + snap.res[game.myPlayer];
     $('hud-sup').textContent = '⬢ ' + snap.sup[game.myPlayer] + '/' + C.UNIT_CAP;
+    const idle = idleWorkerCount();
+    const mineBtn = $('btn-mine');
+    mineBtn.textContent = idle ? '⛏' + idle : '⛏';
+    mineBtn.classList.toggle('has-idle', idle > 0);
   }
 
   // ---------- boot ----------
@@ -275,6 +290,13 @@
       $('btn-mute').textContent = U.toggleMute() ? '🔇' : '🔊';
     });
     $('btn-amove').addEventListener('click', () => RTS.input.setAttackMod(true));
+    $('btn-mine').title = STR.gatherIdle + ' (G)';
+    $('btn-mine').addEventListener('click', () => {
+      const n = idleWorkerCount();
+      if (!n) { U.sfx.error(); game.toast(STR.noIdle); return; }
+      RTS.input.gatherIdle();
+      game.toast(STR.sentToMine);
+    });
     $('btn-over-menu').addEventListener('click', () => { U.sfx.click(); toMenu(); });
 
     // menu strings from the active language table

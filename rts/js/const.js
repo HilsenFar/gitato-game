@@ -16,7 +16,7 @@ RTS.C = {
   CRYSTAL_AMOUNT: 1500,
   CARRY: 8,
   HARVEST_TIME: 2.0,
-  ROOM_PREFIX: 'gitato-rts-v2-',
+  ROOM_PREFIX: 'gitato-rts-v3-',
 };
 
 // kind ids are the index into this list (wire format uses the index).
@@ -92,6 +92,9 @@ RTS.STR_EN = {
   codePH: 'CODE',
   crystals: 'crystals',
   supply: 'units',
+  gatherIdle: 'Send idle workers to mine',
+  noIdle: 'No idle workers',
+  sentToMine: 'Idle workers → mining',
   needCrystals: 'Not enough crystals',
   atCap: 'Unit cap reached',
   invalidSpot: 'Cannot build there',
@@ -102,7 +105,8 @@ RTS.STR_EN = {
   how: [
     'Left-drag: select units. Right-click: move / attack / harvest.',
     'A + left-click: attack-move. S: stop. Esc: cancel.',
-    'Workers harvest crystals and construct buildings.',
+    'Workers harvest crystals and construct buildings — select several and place a building so they all build it together (faster).',
+    'G (or the ⛏ button): send every idle worker back to mining.',
     'HQ trains workers. Barracks: marines & brutes. Factory: mortars & raiders.',
     'Combat units earn ranks: 3 kills → +15% dmg +20% hp, 8 kills → +30% / +40%.',
     'Arrows / edge / middle-drag pan the camera. Wheel zooms. M mutes.',
@@ -150,6 +154,9 @@ RTS.STR_DA = {
   codePH: 'KODE',
   crystals: 'krystaller',
   supply: 'enheder',
+  gatherIdle: 'Send ledige workers i minen',
+  noIdle: 'Ingen ledige workers',
+  sentToMine: 'Ledige workers → høster',
   needCrystals: 'Ikke nok krystaller',
   atCap: 'Enhedsloftet er nået',
   invalidSpot: 'Kan ikke bygge dér',
@@ -160,7 +167,8 @@ RTS.STR_DA = {
   how: [
     'Venstre-træk: vælg enheder. Højreklik: flyt / angrib / høst.',
     'A + venstreklik: angrebsmarch. S: stop. Esc: annullér.',
-    'Workers høster krystaller og opfører bygninger.',
+    'Workers høster krystaller og bygger — vælg flere og placér en bygning, så bygger de den sammen (hurtigere).',
+    'G (eller ⛏-knappen): send alle ledige workers tilbage i minen.',
     'HQ træner workers. Barracks: marines & brutes. Factory: mortars & raiders.',
     'Kampenheder får rang: 3 drab → +15% skade +20% hp, 8 drab → +30% / +40%.',
     'Pile / kanter / midterklik-træk panorerer. Hjul zoomer. M slår lyden fra.',
