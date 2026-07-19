@@ -240,6 +240,10 @@
     const badge = document.createElement('span');
     badge.id = 'auto-badge'; badge.className = 'abadge';
     info.appendChild(badge);
+    // kø-linje for valgt produktionsbygning (opdateres live i updateHudBar)
+    const qline = document.createElement('span');
+    qline.id = 'queue-line'; qline.className = 'qline';
+    info.appendChild(qline);
 
     const addBtn = (label, cost, fn, cls, disabled) => {
       const b = document.createElement('button');
@@ -355,6 +359,18 @@
     const mineBtn = $('btn-mine');
     mineBtn.textContent = idle ? '⛏' + idle : '⛏';
     mineBtn.classList.toggle('has-idle', idle > 0);
+    // live kø-status for valgt produktionsbygning: "kø: ▲▲● 63%"
+    const qline = document.getElementById('queue-line');
+    if (qline) {
+      const sel = RTS.input.selEnts().filter((e) => K[e.kind].bld && K[e.kind].trains && e.owner === game.myPlayer);
+      if (sel.length === 1 && sel[0].qlen > 0) {
+        const b = sel[0];
+        const glyph = { worker: '⛏', marine: '▲', brute: '■', mortar: '●', raider: '▶' }[KL[b.qkind]] || '?';
+        qline.textContent = ' · ' + STR.queueLabel + ': ' + glyph.repeat(Math.min(b.qlen, 5)) + ' ' + Math.round(b.prog) + '%';
+      } else {
+        qline.textContent = '';
+      }
+    }
     // live auto-assist state (the command card is not rebuilt per snapshot)
     if (game.autoBtn && game.autoIds && game.autoIds.length) {
       const n = autoWorkerCount(game.autoIds);

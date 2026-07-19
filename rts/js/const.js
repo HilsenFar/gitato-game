@@ -139,6 +139,7 @@ RTS.STR_EN = {
   upgradeBought: 'Upgrade purchased',
   autoAssist: 'Auto-assist',
   rallySet: 'Rally point set',
+  queueLabel: 'queue',
   upDescr: {
     drill: 'Workers carry 12 crystals instead of 8.',
     stims: 'Marines and brutes deal +10% damage.',
@@ -154,6 +155,7 @@ RTS.STR_EN = {
     'HQ trains workers. Barracks: marines & brutes. Factory: mortars & raiders. Q/W/E are train hotkeys on a selected building.',
     'Rally points: right-click with a production building selected. Rally the HQ on a crystal and new workers start mining it automatically.',
     'Upgrades: select the HQ (Mining Drill), Barracks (Combat Stims), Factory (Hardened Alloys) or a Turret (Overcharge) and buy from the command card.',
+    'Buildings only work once BUILT — a pulsing ⚠ means construction stalled (send a worker!). Turrets outrange everything except mortars; Overcharge fixes that.',
     'Combat units earn ranks: 3 kills → +15% dmg +20% hp, 8 kills → +30% / +40%.',
     'The minimap shows crystal fields as green dots — click or drag it to pan. Arrows / edge / middle-drag pan too. Wheel zooms. M mutes.',
     'Skirmish: pick the AI difficulty (EASY / NORMAL / HARD) under the Skirmish button.',
@@ -224,6 +226,7 @@ RTS.STR_DA = {
   upgradeBought: 'Opgradering købt',
   autoAssist: 'Auto-hjælp',
   rallySet: 'Samlingspunkt sat',
+  queueLabel: 'kø',
   upDescr: {
     drill: 'Workers bærer 12 krystaller i stedet for 8.',
     stims: 'Marines og brutes giver +10% skade.',
@@ -239,6 +242,7 @@ RTS.STR_DA = {
     'HQ træner workers. Barracks: marines & brutes. Factory: mortars & raiders. Q/W/E er træn-genveje på en valgt bygning.',
     'Samlingspunkter: højreklik med en valgt produktionsbygning. Sæt HQ’ets samlingspunkt på en krystal, så høster nye workers den automatisk.',
     'Opgraderinger: vælg HQ (Mining Drill), Barracks (Combat Stims), Factory (Hardened Alloys) eller en Turret (Overcharge) og køb på kommandokortet.',
+    'Bygninger virker først når de er BYGGET FÆRDIGE — et blinkende ⚠ betyder at byggeriet er gået i stå (send en worker!). Turrets out-ranger alt undtagen mortars; Overcharge løser dét.',
     'Kampenheder får rang: 3 drab → +15% skade +20% hp, 8 drab → +30% / +40%.',
     'Minimappet viser krystalfelter som grønne prikker — klik eller træk i det for at panorere. Pile / kanter / midterklik-træk panorerer også. Hjul zoomer. M slår lyden fra.',
     'Skirmish: vælg AI-sværhedsgrad (LET / NORMAL / SVÆR) under Skirmish-knappen.',

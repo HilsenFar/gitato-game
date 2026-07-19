@@ -98,6 +98,7 @@ body {
 .cbtn .cost { color: var(--green); font-weight: 400; font-size: .75rem; }
 /* ●A badge in sel-info while selected workers run auto-assist */
 .abadge { color: var(--green); font-weight: 700; }
+.qline { color: #c88aff; font-weight: 700; }
 .cbtn .key {
   color: var(--dim); font-weight: 400; font-size: .7rem;
   border: 1px solid var(--line); border-radius: 4px; padding: 0 .25rem;

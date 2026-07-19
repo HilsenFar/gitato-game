@@ -6,6 +6,9 @@
 RTS.render = (() => {
   const C = RTS.C, K = RTS.KINDS, KL = RTS.KIND_LIST, U = RTS.util;
   const T = C.TILE, EV = RTS.EV;
+  // kø-chip-glyffer pr. enhedstype + stalled-byggeri-overvågning (id -> {prog, ts})
+  const KIND_GLYPH = { worker: '⛏', marine: '▲', brute: '■', mortar: '●', raider: '▶' };
+  const buildWatch = new Map();
 
   let cv, ctx, mmCv, mmCtx;
   let map = null;
@@ -242,6 +245,7 @@ RTS.render = (() => {
     const techMask = view.next.tech || [0, 0];
 
     // ---- overlay: health bars ----
+    const nowMs = performance.now();
     for (const e of list) {
       const k = K[e.kind];
       let maxhp = e.kind === 'crystal' ? C.CRYSTAL_AMOUNT : k.hp;
@@ -288,11 +292,38 @@ RTS.render = (() => {
         ctx.fillRect(s.x - wBar / 2, s.y + 6, wBar, 4);
         ctx.fillStyle = '#00c8ff';
         ctx.fillRect(s.x - wBar / 2, s.y + 6, wBar * (e.prog / 100), 4);
+        // stalled-byggeri-advarsel: prog uændret i >2.5s => ingen worker bygger
+        let watch = buildWatch.get(e.id);
+        if (!watch || watch.prog !== e.prog) { watch = { prog: e.prog, ts: nowMs }; buildWatch.set(e.id, watch); }
+        if (e.owner === myPlayer && nowMs - watch.ts > 2500) {
+          const pulse = 0.55 + 0.45 * Math.sin(nowMs / 180);
+          ctx.fillStyle = `rgba(255,216,104,${pulse})`;
+          ctx.font = 'bold 15px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('⚠', s.x, s.y - 10);
+          ctx.textAlign = 'left';
+        }
       } else if (k.bld && e.qlen > 0 && e.owner === myPlayer) {
+        buildWatch.delete(e.id);
         ctx.fillStyle = 'rgba(0,0,0,.6)';
-        ctx.fillRect(s.x - wBar / 2, s.y + 6, wBar, 4);
+        ctx.fillRect(s.x - wBar / 2, s.y + 6, wBar, 5);
         ctx.fillStyle = '#c88aff';
-        ctx.fillRect(s.x - wBar / 2, s.y + 6, wBar * (e.prog / 100), 4);
+        ctx.fillRect(s.x - wBar / 2, s.y + 6, wBar * (e.prog / 100), 5);
+        // kø-chip: glyf for enheden i produktion + antal i køen
+        const glyph = KIND_GLYPH[KL[e.qkind]] || '?';
+        const label = glyph + '×' + e.qlen;
+        ctx.font = 'bold 11px sans-serif';
+        const tw = ctx.measureText(label).width + 8;
+        const bx = s.x + wBar / 2 + 5, by = s.y + 1;
+        ctx.fillStyle = 'rgba(10,10,24,.85)';
+        ctx.fillRect(bx, by, tw, 14);
+        ctx.strokeStyle = 'rgba(200,138,255,.7)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx, by, tw, 14);
+        ctx.fillStyle = '#c88aff';
+        ctx.fillText(label, bx + 4, by + 11);
+      } else {
+        buildWatch.delete(e.id);
       }
     }
 
