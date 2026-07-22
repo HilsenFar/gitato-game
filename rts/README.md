@@ -56,6 +56,19 @@ on a selected production building), and touch controls are all in.
   green dots so new clusters are findable through the fog.
 - **Language** — UI is English by default; an EN/DA toggle in the main menu
   switches to Danish (persisted in `localStorage['rts-lang']`).
+- **Replays** — every finished skirmish or hosted game is recorded (seed +
+  command stream, so files stay tiny) and kept as "last game"; the game-over
+  screen offers a `.json` download, and in online games the host hands the
+  client a copy too. Watch from the menu (last game or a loaded file):
+  fog-free spectator view with pause and 1×/2×/4× speed. Playback re-runs the
+  deterministic sim with the recorded commands (`js/replay.js`); a version
+  stamp (wire prefix + a hash of the balance tables) flags replays from other
+  versions, and playback that diverges from the recorded result says so.
+  Spectators can select either player's units to inspect them; orders are
+  disabled. Known cosmetic limit: in-flight projectiles are drawn straight
+  from snapshots, so at 2×/4× short bolt flights may skip frames. (This work
+  also fixed a pre-existing bug where a game ending on an off-cadence tick
+  never showed the results panel.)
 
 ## Architecture
 
@@ -73,6 +86,7 @@ opponent vanishes (WebRTC close events alone are unreliable).
 | `js/sim.js`   | authoritative simulation (economy, combat, construction) |
 | `js/ai.js`    | skirmish bot |
 | `js/net.js`   | PeerJS host/join wrapper |
+| `js/replay.js`| replay recording, save/load, playback cursor |
 | `js/scene3d.js`| Three.js scene: camera, procedural meshes, fog plane, picking |
 | `js/render.js`| view layer: snapshot interpolation, fog of war, overlay HUD, minimap |
 | `js/input.js` | selection, orders, camera, placement, touch |

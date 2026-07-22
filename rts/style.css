@@ -161,6 +161,16 @@ body {
   flex: 1; padding: .35rem .3rem;
   font-size: .78rem; font-weight: 700; letter-spacing: .06em;
 }
+/* replay row in the menu: last game + load-from-file */
+.replayrow { display: flex; gap: .5rem; }
+.replayrow .mbtn {
+  flex: 1; border-color: var(--orange); color: var(--orange);
+  font-size: .8rem; padding: .5rem .5rem;
+}
+.replayrow .mbtn:hover { box-shadow: 0 0 24px rgba(255, 150, 40, .35); }
+/* replay controls in the topbar (⏸ / speed), shown only in replay mode */
+#replaybar { display: none; align-items: center; gap: .35rem; }
+#replaybar.show { display: flex; }
 .joinrow { display: flex; gap: .5rem; }
 .joinrow .mbtn { flex: 1; border-color: var(--magenta); color: var(--magenta); }
 .joinrow .mbtn:hover { box-shadow: 0 0 24px rgba(255, 40, 180, .4); }
@@ -185,6 +195,7 @@ body {
 
 @media (max-width: 640px) {
   #minimap { width: 110px; height: 110px; }
-  #topbar { font-size: .8rem; gap: .6rem; }
+  /* wrap so the replaybar can never push ☰ off-screen (touch has no ESC) */
+  #topbar { font-size: .8rem; gap: .6rem; flex-wrap: wrap; row-gap: .25rem; }
   #cardwrap { width: 58vw; }
 }

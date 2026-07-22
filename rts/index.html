@@ -24,6 +24,12 @@
     <span id="hud-sup" title="Units">⬢ 0/60</span>
     <span id="hud-color"></span>
     <span id="hud-room"></span>
+    <span id="replaybar">
+      <button id="btn-rp-pause" class="tbtn">⏸</button>
+      <button id="btn-rp-1" class="tbtn active">1×</button>
+      <button id="btn-rp-2" class="tbtn">2×</button>
+      <button id="btn-rp-4" class="tbtn">4×</button>
+    </span>
     <span class="spacer"></span>
     <button id="btn-mine" class="tbtn" title="Send idle workers to mine (G)">⛏</button>
     <button id="btn-amove" class="tbtn" title="Attack-move (A)">⚔</button>
@@ -67,8 +73,13 @@
       <input id="join-code" maxlength="6" placeholder="CODE" autocomplete="off" spellcheck="false">
       <button id="btn-join" class="mbtn">Join Online Game</button>
     </div>
+    <div class="replayrow">
+      <button id="btn-replay" class="mbtn">Watch last game</button>
+      <button id="btn-replay-load" class="mbtn">Load replay…</button>
+    </div>
     <button id="btn-lang" class="mbtn lang">Language: EN</button>
   </div>
+  <input type="file" id="replay-file" accept=".json,application/json" hidden>
   <p id="menu-msg"></p>
   <details>
     <summary>How to play</summary>
@@ -82,6 +93,7 @@
   <h1 id="over-title">VICTORY</h1>
   <p id="over-sub"></p>
   <div class="btns">
+    <button id="btn-save-replay" class="mbtn" style="display:none">Save replay</button>
     <button id="btn-over-menu" class="mbtn">Back to menu</button>
   </div>
 </div>
@@ -94,6 +106,7 @@
 <script src="./js/sim.js"></script>
 <script src="./js/ai.js"></script>
 <script src="./js/net.js"></script>
+<script src="./js/replay.js"></script>
 <script src="./js/scene3d.js"></script>
 <script src="./js/render.js"></script>
 <script src="./js/input.js"></script>
