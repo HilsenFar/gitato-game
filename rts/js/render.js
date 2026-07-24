@@ -16,6 +16,7 @@ RTS.render = (() => {
   let mmTerrain = null;      // cached minimap ground
   let fog = null;            // Uint8Array per tile: 0 unseen, 1 explored, 2 visible
   let fogCv = null, fogCtx = null;
+  let reveal = false;        // replay spectator: everything visible
   let myPlayer = 0;
   let particles = [];
   let lastFrame = 0;
@@ -43,6 +44,7 @@ RTS.render = (() => {
 
   function setMap(m, player) {
     map = m; myPlayer = player;
+    reveal = false; // a normal match must never inherit the replay reveal
     particles = [];
     view.reset();
     fog = new Uint8Array(m.W * m.H);
@@ -86,17 +88,21 @@ RTS.render = (() => {
   }
 
   function updateFog(snap) {
-    for (let i = 0; i < fog.length; i++) if (fog[i] === 2) fog[i] = 1;
-    for (const e of snap.e) {
-      if (e[2] !== myPlayer) continue;
-      const k = K[KL[e[1]]];
-      const sight = k.sight || 6;
-      const cx = (e[3] / T) | 0, cy = (e[4] / T) | 0;
-      for (let dy = -sight; dy <= sight; dy++) for (let dx = -sight; dx <= sight; dx++) {
-        if (dx * dx + dy * dy > sight * sight) continue;
-        const x = cx + dx, y = cy + dy;
-        if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
-        fog[y * map.W + x] = 2;
+    if (reveal) {
+      fog.fill(2);
+    } else {
+      for (let i = 0; i < fog.length; i++) if (fog[i] === 2) fog[i] = 1;
+      for (const e of snap.e) {
+        if (e[2] !== myPlayer) continue;
+        const k = K[KL[e[1]]];
+        const sight = k.sight || 6;
+        const cx = (e[3] / T) | 0, cy = (e[4] / T) | 0;
+        for (let dy = -sight; dy <= sight; dy++) for (let dx = -sight; dx <= sight; dx++) {
+          if (dx * dx + dy * dy > sight * sight) continue;
+          const x = cx + dx, y = cy + dy;
+          if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
+          fog[y * map.W + x] = 2;
+        }
       }
     }
     // redraw fog canvas (1 px per tile; the 3D fog plane and minimap sample it)
@@ -219,9 +225,11 @@ RTS.render = (() => {
   }
 
   // ---- main draw ----
-  // st: { cam:{x,y,zoom}, sel:Set, placing:{kind,tx,ty,valid}|null, drag:{x0,y0,x1,y1}|null }
+  // st: { cam:{x,y,zoom}, sel:Set, placing:{kind,tx,ty,valid}|null, drag:{x0,y0,x1,y1}|null, paused:bool }
   function draw(st) {
     const now = performance.now();
+    // a frozen sim must not trip the stalled-construction timer
+    if (st.paused) buildWatch.clear();
     const dt = Math.min(0.1, (now - lastFrame) / 1000 || 0.016);
     lastFrame = now;
     stepParticles(dt);
@@ -263,7 +271,9 @@ RTS.render = (() => {
       const selected = st.sel.has(e.id);
       const constructing = (e.flags & 2) !== 0;
       if (e.kind === 'crystal') continue;
-      if (frac >= 1 && !selected && !constructing && !e.vet && !(k.bld && e.qlen > 0 && e.owner === myPlayer)) continue;
+      // reveal (replay spectator): production info shows for BOTH players
+      const infoOwner = reveal || e.owner === myPlayer;
+      if (frac >= 1 && !selected && !constructing && !e.vet && !(k.bld && e.qlen > 0 && infoOwner)) continue;
       const top = k.bld ? 52 : 26;
       const s = S3.worldToScreen(e.x, e.y, top);
       if (s.behind) continue;
@@ -295,7 +305,7 @@ RTS.render = (() => {
         // stalled-byggeri-advarsel: prog uændret i >2.5s => ingen worker bygger
         let watch = buildWatch.get(e.id);
         if (!watch || watch.prog !== e.prog) { watch = { prog: e.prog, ts: nowMs }; buildWatch.set(e.id, watch); }
-        if (e.owner === myPlayer && nowMs - watch.ts > 2500) {
+        if (!st.paused && infoOwner && nowMs - watch.ts > 2500) {
           const pulse = 0.55 + 0.45 * Math.sin(nowMs / 180);
           ctx.fillStyle = `rgba(255,216,104,${pulse})`;
           ctx.font = 'bold 15px sans-serif';
@@ -303,7 +313,7 @@ RTS.render = (() => {
           ctx.fillText('⚠', s.x, s.y - 10);
           ctx.textAlign = 'left';
         }
-      } else if (k.bld && e.qlen > 0 && e.owner === myPlayer) {
+      } else if (k.bld && e.qlen > 0 && infoOwner) {
         buildWatch.delete(e.id);
         ctx.fillStyle = 'rgba(0,0,0,.6)';
         ctx.fillRect(s.x - wBar / 2, s.y + 6, wBar, 5);
@@ -340,8 +350,9 @@ RTS.render = (() => {
     }
 
     // ---- overlay: rally flag for selected own production buildings ----
+    // (in replay, spectators can select and inspect both players')
     for (const e of list) {
-      if (!st.sel.has(e.id) || e.owner !== myPlayer) continue;
+      if (!st.sel.has(e.id) || !(reveal || e.owner === myPlayer)) continue;
       if (!K[e.kind].bld || !K[e.kind].trains || (e.flags & 2)) continue;
       if (!e.rx && !e.ry) continue;
       const a = S3.worldToScreen(e.x, e.y, 2);
@@ -432,5 +443,10 @@ RTS.render = (() => {
     mmCtx.stroke();
   }
 
-  return { initCanvas, setMap, view, draw, ents, entAt, visibleAt, exploredAt, drawable };
+  function setReveal(v) {
+    reveal = v;
+    if (map && view.next) updateFog(view.next);
+  }
+
+  return { initCanvas, setMap, setReveal, view, draw, ents, entAt, visibleAt, exploredAt, drawable };
 })();

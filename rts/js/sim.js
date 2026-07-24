@@ -253,6 +253,9 @@ RTS.sim = (() => {
         const placer = mine(ids[0]);
         const k = K[cmd.kind];
         if (!placer || placer.kind !== 'worker' || !k || !k.bld) break;
+        // non-finite coords sail through footprintFree's bounds checks and
+        // would plant a phantom building at NaN (wire cmds are untrusted)
+        if (!Number.isFinite(cmd.x) || !Number.isFinite(cmd.y)) break;
         if (s.res[cmd.p] < k.cost || !footprintFree(s, cmd.kind, cmd.x, cmd.y)) break;
         s.res[cmd.p] -= k.cost;
         const b = placeBuilding(s, cmd.kind, cmd.p, cmd.x, cmd.y);

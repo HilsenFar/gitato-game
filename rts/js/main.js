@@ -21,6 +21,7 @@
     cardHotkeys: {},     // physical key code -> command-card action
 
     sendCmd(cmd) {
+      if (game.mode === 'replay') return; // spectator — orders go nowhere
       cmd.p = game.myPlayer;
       if (game.mode === 'client') RTS.net.send({ c: 'cmds', list: [cmd] });
       else game.pending.push(cmd);
@@ -59,6 +60,9 @@
     if (simTimer) { clearInterval(simTimer); simTimer = null; }
     if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
     RTS.net.destroy();
+    RTS.replay.abort(); // a game quit mid-match records nothing
+    RTS.replay.stop();
+    game.replayPaused = false;
     game.sim = null; game.ai = null;
     game.sel.clear(); game.placing = null;
     game.pending = []; game.remote = [];
@@ -73,24 +77,57 @@
     if (vsAi) game.ai = RTS.ai.create(1, game.diff); // difficulty from the menu row
   }
 
+  // one sim tick: live modes gather+record commands, replay feeds the log back
+  function simTick() {
+    let cmds;
+    if (game.mode === 'replay') {
+      cmds = RTS.replay.cmdsFor(game.sim.tick);
+    } else {
+      cmds = game.pending.concat(game.remote);
+      game.pending = []; game.remote = [];
+      if (game.ai) cmds.push(...RTS.ai.think(game.ai, game.sim));
+      RTS.replay.record(game.sim.tick, cmds);
+    }
+    RTS.sim.step(game.sim, cmds);
+    // replay at N× stretches the snapshot cadence so pushes stay ~10 Hz real
+    // time — pushing bursts of snapshots per interval makes motion judder.
+    // Always snapshot a finished game: if the final HQ falls on an off-cadence
+    // tick, step() early-returns forever after and the tick never reaches the
+    // next boundary — without this the over panel never shows.
+    const snapEvery = game.mode === 'replay' ? C.SNAP_EVERY * (game.replaySpeed || 1) : C.SNAP_EVERY;
+    if (game.sim.tick % snapEvery === 0 || (game.sim.over !== -1 && !game.overShown)) {
+      const snap = RTS.sim.snapshot(game.sim);
+      RTS.render.view.push(snap);
+      if (game.mode === 'host') RTS.net.send({ c: 'snap', s: snap });
+      checkOver(snap);
+    }
+  }
+
   // authoritative loop (setInterval so the sim survives a hidden tab)
   function startSimLoop() {
     if (simTimer) return;
     simTimer = setInterval(() => {
-      const cmds = game.pending.concat(game.remote);
-      game.pending = []; game.remote = [];
-      if (game.ai) cmds.push(...RTS.ai.think(game.ai, game.sim));
-      RTS.sim.step(game.sim, cmds);
-      if (game.sim.tick % C.SNAP_EVERY === 0) {
-        const snap = RTS.sim.snapshot(game.sim);
-        RTS.render.view.push(snap);
-        if (game.mode === 'host') RTS.net.send({ c: 'snap', s: snap });
-        checkOver(snap);
+      if (game.mode !== 'replay') { simTick(); return; }
+      // replay: ⏸ + speed multiplier + end/drift handling
+      if (game.replayPaused || game.overShown || !game.sim) return;
+      const rep = RTS.replay.current();
+      for (let i = 0; i < (game.replaySpeed || 1) && !game.overShown; i++) {
+        simTick();
+        if (!rep || game.sim.over !== -1) continue; // checkOver ends it on the next snap
+        if (rep.reason !== 'over' && game.sim.tick >= rep.endTick) {
+          // the recording ended by disconnect, not by an HQ falling
+          game.overShown = true;
+          showReplayEnd(rep.winner, false);
+        } else if (game.sim.tick > rep.endTick + 400) {
+          // 20 s past the recorded end with no result: playback drifted
+          game.overShown = true;
+          showReplayEnd(rep.winner, true);
+        }
       }
     }, C.TICK_MS);
   }
 
-  // ---- pause (ESC / ☰) — only skirmish can freeze the sim; online keeps running ----
+  // ---- pause (ESC / ☰) — skirmish & replay can freeze the sim; online keeps running ----
   let paused = false;
   function setPaused(on) {
     if (game.mode === 'menu') return;
@@ -98,14 +135,15 @@
     if (paused === on) return;
     paused = on;
     game.paused = on;
+    const canFreeze = game.mode === 'skirmish' || game.mode === 'replay';
     if (on) {
-      $('btn-pause-restart').style.display = game.mode === 'skirmish' ? '' : 'none';
-      $('pause-note').textContent = game.mode === 'skirmish' ? '' : STR.pauseMpNote;
+      $('btn-pause-restart').style.display = canFreeze ? '' : 'none';
+      $('pause-note').textContent = canFreeze ? '' : STR.pauseMpNote;
       show('pause');
-      if (game.mode === 'skirmish' && simTimer) { clearInterval(simTimer); simTimer = null; }
+      if (canFreeze && simTimer) { clearInterval(simTimer); simTimer = null; }
     } else {
       show(null);
-      if (game.mode === 'skirmish') startSimLoop();
+      if (canFreeze) startSimLoop();
     }
   }
 
@@ -116,6 +154,10 @@
     game.map = RTS.map.generate(seed);
     RTS.render.setMap(game.map, myPlayer);
     if (mode !== 'client') game.sim = RTS.sim.init(seed);
+    // record on the simulating side (client plays back the host's stream)
+    if (mode === 'skirmish' || mode === 'host') {
+      RTS.replay.begin(mode, seed, mode === 'skirmish' ? game.diff : null);
+    }
 
     // camera centered on own base (cam.x/y = ground point at screen center)
     const st = game.map.starts[myPlayer];
@@ -125,9 +167,18 @@
 
     show(null);
     $('hud').classList.add('show');
-    $('hud-color').textContent = STR.youAre.replace('{color}', myPlayer === 0 ? STR.cyan : STR.magenta);
-    $('hud-color').style.color = RTS.PCOL[myPlayer].main;
-    $('hud-room').textContent = game.roomCode && mode !== 'skirmish' ? STR.room.replace('{code}', game.roomCode) : '';
+    if (mode === 'replay') {
+      $('hud-color').textContent = STR.replayLabel;
+      $('hud-color').style.color = '#ff9628';
+    } else {
+      $('hud-color').textContent = STR.youAre.replace('{color}', myPlayer === 0 ? STR.cyan : STR.magenta);
+      $('hud-color').style.color = RTS.PCOL[myPlayer].main;
+    }
+    $('hud-room').textContent = game.roomCode && (mode === 'host' || mode === 'client') ? STR.room.replace('{code}', game.roomCode) : '';
+    $('replaybar').classList.toggle('show', mode === 'replay');
+    // order buttons are meaningless for a spectator (and crowd the topbar)
+    $('btn-mine').style.display = mode === 'replay' ? 'none' : '';
+    $('btn-amove').style.display = mode === 'replay' ? 'none' : '';
     buildCommandCard();
 
     if (mode !== 'client') {
@@ -188,6 +239,17 @@
         lastPeerMsg = performance.now();
         if (m.c === 'init') beginMatch('client', 1, m.seed);
         else if (m.c === 'snap') { RTS.render.view.push(m.s); checkOver(m.s); }
+        else if (m.c === 'replay') {
+          // the host shares the finished game's replay with the client — but
+          // peer data is untrusted: only accept it once the game actually
+          // ended, and never persist absurd payloads
+          if (!game.overShown) return;
+          let size = 0;
+          try { size = JSON.stringify(m.data).length; } catch (e) { return; }
+          if (size > 2000000) return;
+          const rep = RTS.replay.validate(m.data);
+          if (rep) { lastRep = rep; RTS.replay.storeLast(rep); $('btn-save-replay').style.display = ''; }
+        }
       },
       onClose: () => onPeerGone(),
       onError: (kind) => {
@@ -202,14 +264,37 @@
     if (game.overShown) return;
     game.overShown = true;
     showGameOver(true, STR.peerGone);
+    finishRecording(game.myPlayer, 'disconnect'); // survivor wins by default
   }
 
   // ---------- game over ----------
   function checkOver(snap) {
     if (snap.over === -1 || game.overShown) return;
     game.overShown = true;
+    if (game.mode === 'replay') {
+      // faithful playback ends with exactly the recorded winner at exactly the
+      // recorded tick; anything else — and a 'disconnect' recording reaching a
+      // sim game-over at all — means the sim diverged from the recording
+      const rep = RTS.replay.current();
+      const drifted = !!rep && (rep.reason !== 'over' || snap.over !== rep.winner || game.sim.tick !== rep.endTick);
+      showReplayEnd(snap.over, drifted);
+      return;
+    }
     const won = snap.over === game.myPlayer;
     showGameOver(won, null, snap.over === 2);
+    finishRecording(snap.over, 'over');
+  }
+
+  // close the recording, keep it for the save button, remember it as the last
+  // game, and hand the client a copy over the wire (old clients ignore it)
+  let lastRep = null;
+  function finishRecording(winner, reason) {
+    const rep = RTS.replay.finish(winner, game.sim ? game.sim.tick : 0, reason);
+    if (!rep) return; // nothing was recording (client / replay)
+    lastRep = rep;
+    RTS.replay.storeLast(rep);
+    if (game.mode === 'host') RTS.net.send({ c: 'replay', data: rep });
+    $('btn-save-replay').style.display = '';
   }
 
   function showGameOver(won, subtitle, draw) {
@@ -217,9 +302,40 @@
     $('over-title').textContent = draw ? STR.draw : won ? STR.victory : STR.defeat;
     $('over-title').style.color = won && !draw ? RTS.PCOL[game.myPlayer].main : '#ff5050';
     $('over-sub').textContent = subtitle || '';
+    $('btn-save-replay').style.display = 'none'; // finishRecording unhides it
     show('over');
     if (draw) { /* no fanfare */ }
     else if (won) U.sfx.victory(); else U.sfx.defeat();
+  }
+
+  // ---------- replays ----------
+  function showReplayEnd(winner, drifted) {
+    paused = false; game.paused = false;
+    game.replayPaused = true;
+    $('over-title').textContent = STR.replayEnded;
+    $('over-title').style.color = '#ff9628';
+    const who = winner === 2 ? STR.draw
+      : STR.replayWinnerIs.replace('{color}', winner === 0 ? STR.cyan : STR.magenta);
+    $('over-sub').textContent = who + (drifted ? ' — ' + STR.replayDrift : '');
+    $('btn-save-replay').style.display = 'none';
+    show('over');
+  }
+
+  function startReplay(rep) {
+    stopGame();
+    const comp = RTS.replay.compat(rep);
+    RTS.replay.start(rep);
+    game.replaySpeed = 1;
+    game.replayPaused = false;
+    setReplaySpeedUI();
+    beginMatch('replay', 0, rep.seed);
+    RTS.render.setReveal(true); // spectators see through the fog
+    if (comp !== 'ok') game.toast(STR.replayVersion);
+  }
+
+  function setReplaySpeedUI() {
+    for (const sp of [1, 2, 4]) $('btn-rp-' + sp).classList.toggle('active', (game.replaySpeed || 1) === sp);
+    $('btn-rp-pause').textContent = game.replayPaused ? '⏵' : '⏸';
   }
 
   // ---------- HUD ----------
@@ -244,6 +360,9 @@
     const qline = document.createElement('span');
     qline.id = 'queue-line'; qline.className = 'qline';
     info.appendChild(qline);
+
+    // replay spectators inspect but never command — no buttons, no false toasts
+    if (game.mode === 'replay') return;
 
     const addBtn = (label, cost, fn, cls, disabled) => {
       const b = document.createElement('button');
@@ -353,8 +472,13 @@
   function updateHudBar() {
     const snap = RTS.render.view.next;
     if (!snap) return;
-    $('hud-res').textContent = '◆ ' + snap.res[game.myPlayer];
-    $('hud-sup').textContent = '⬢ ' + snap.sup[game.myPlayer] + '/' + C.UNIT_CAP;
+    if (game.mode === 'replay') { // spectators see both economies
+      $('hud-res').textContent = '◆ ' + snap.res[0] + ' · ' + snap.res[1];
+      $('hud-sup').textContent = '⬢ ' + snap.sup[0] + ' · ' + snap.sup[1];
+    } else {
+      $('hud-res').textContent = '◆ ' + snap.res[game.myPlayer];
+      $('hud-sup').textContent = '⬢ ' + snap.sup[game.myPlayer] + '/' + C.UNIT_CAP;
+    }
     const idle = idleWorkerCount();
     const mineBtn = $('btn-mine');
     mineBtn.textContent = idle ? '⛏' + idle : '⛏';
@@ -362,7 +486,8 @@
     // live kø-status for valgt produktionsbygning: "kø: ▲▲● 63%"
     const qline = document.getElementById('queue-line');
     if (qline) {
-      const sel = RTS.input.selEnts().filter((e) => K[e.kind].bld && K[e.kind].trains && e.owner === game.myPlayer);
+      const sel = RTS.input.selEnts().filter((e) => K[e.kind].bld && K[e.kind].trains
+        && (game.mode === 'replay' ? e.owner < 2 : e.owner === game.myPlayer));
       if (sel.length === 1 && sel[0].qlen > 0) {
         const b = sel[0];
         const glyph = { worker: '⛏', marine: '▲', brute: '■', mortar: '●', raider: '▶' }[KL[b.qkind]] || '?';
@@ -408,6 +533,43 @@
     diffBtns.easy.textContent = STR.diffEasy;
     diffBtns.normal.textContent = STR.diffNormal;
     diffBtns.hard.textContent = STR.diffHard;
+    // replays: last game from localStorage, or any saved .json file
+    $('btn-replay').addEventListener('click', () => {
+      if (game.mode !== 'menu') return;
+      U.audio(); U.sfx.click();
+      const rep = RTS.replay.loadLast();
+      if (!rep) { game.toast(STR.replayNone); return; }
+      startReplay(rep);
+    });
+    $('btn-replay-load').addEventListener('click', () => {
+      if (game.mode !== 'menu') return;
+      U.sfx.click(); $('replay-file').click();
+    });
+    $('replay-file').addEventListener('change', (ev) => {
+      const f = ev.target.files && ev.target.files[0];
+      ev.target.value = ''; // re-selecting the same file must fire again
+      if (!f) return;
+      f.text().then((txt) => {
+        // a match may have started while the OS file dialog was open (e.g. a
+        // waiting host got joined) — starting the replay now would tear it down
+        if (game.mode !== 'menu') return;
+        let rep = null;
+        try { rep = RTS.replay.validate(JSON.parse(txt)); } catch (e) { /* not JSON */ }
+        if (!rep) { U.sfx.error(); game.toast(STR.replayBad); return; }
+        U.audio();
+        startReplay(rep);
+      });
+    });
+    $('btn-save-replay').addEventListener('click', () => { U.sfx.click(); if (lastRep) RTS.replay.download(lastRep); });
+    $('btn-rp-pause').addEventListener('click', () => {
+      U.sfx.click();
+      game.replayPaused = !game.replayPaused;
+      setReplaySpeedUI();
+    });
+    for (const sp of [1, 2, 4]) {
+      $('btn-rp-' + sp).addEventListener('click', () => { U.sfx.click(); game.replaySpeed = sp; setReplaySpeedUI(); });
+    }
+
     $('btn-host').addEventListener('click', () => { U.audio(); U.sfx.click(); show('menu'); hostOnline(); });
     $('btn-join').addEventListener('click', () => {
       U.audio(); U.sfx.click();
@@ -418,7 +580,11 @@
     game.togglePause = () => setPaused(!paused);
     $('btn-menu').addEventListener('click', () => { U.sfx.click(); if (game.mode === 'menu') return; setPaused(true); });
     $('btn-resume').addEventListener('click', () => { U.sfx.click(); setPaused(false); });
-    $('btn-pause-restart').addEventListener('click', () => { U.sfx.click(); startLocal(true); }); // stopGame() resets paused + game.paused
+    $('btn-pause-restart').addEventListener('click', () => { // stopGame() resets paused + game.paused
+      U.sfx.click();
+      const rep = game.mode === 'replay' ? RTS.replay.current() : null;
+      if (rep) startReplay(rep); else startLocal(true);
+    });
     $('btn-pause-quit').addEventListener('click', () => { U.sfx.click(); toMenu(); });
     $('btn-mute').addEventListener('click', () => {
       $('btn-mute').textContent = U.toggleMute() ? '🔇' : '🔊';
@@ -426,6 +592,7 @@
     $('btn-amove').addEventListener('click', () => RTS.input.setAttackMod(true));
     $('btn-mine').title = STR.gatherIdle + ' (G)';
     $('btn-mine').addEventListener('click', () => {
+      if (game.mode === 'replay') return; // spectators issue no orders
       const n = idleWorkerCount();
       if (!n) { U.sfx.error(); game.toast(STR.noIdle); return; }
       RTS.input.gatherIdle();
@@ -438,6 +605,9 @@
     $('btn-skirmish').textContent = STR.skirmish;
     $('btn-host').textContent = STR.host;
     $('btn-join').textContent = STR.join;
+    $('btn-replay').textContent = STR.replayLast;
+    $('btn-replay-load').textContent = STR.replayLoad;
+    $('btn-save-replay').textContent = STR.saveReplay;
     $('btn-over-menu').textContent = STR.backToMenu;
     document.querySelector('#menu summary').textContent = STR.howTitle;
     $('how-list').innerHTML = STR.how.map((l) => `<li>${l}</li>`).join('');
@@ -468,6 +638,7 @@
         RTS.render.draw({
           cam: game.cam, sel: game.sel,
           placing: game.placing, drag: RTS.input.getDrag(),
+          paused: paused || !!game.replayPaused,
         });
         updateHudBar();
         // selection may reference dead entities

@@ -125,7 +125,7 @@ RTS.input = (() => {
       return;
     }
     switch (e.code) {
-      case 'KeyA': if (game.sel.size && !game.placing) setAttackMod(true); break;
+      case 'KeyA': if (game.mode !== 'replay' && game.sel.size && !game.placing) setAttackMod(true); break;
       case 'KeyS': sendToSel('stop'); break;
       case 'KeyG': gatherIdle(); break;
       case 'KeyM': {
@@ -152,13 +152,15 @@ RTS.input = (() => {
   }
 
   // ---- selection ----
-  function myEnts() { return RTS.render.ents().filter((e) => e.owner === game.myPlayer); }
+  // replay spectators may select (inspect) BOTH players' entities
+  const selectable = (e) => e.owner === game.myPlayer || (game.mode === 'replay' && e.owner < 2);
+  function myEnts() { return RTS.render.ents().filter(selectable); }
 
   function clickSelect(sx, sy, add) {
     const w = s2w(sx, sy);
     const e = RTS.render.entAt(w.x, w.y);
     if (!add) game.sel.clear();
-    if (e && e.owner === game.myPlayer) {
+    if (e && selectable(e)) {
       if (game.sel.has(e.id) && add) game.sel.delete(e.id);
       else { game.sel.add(e.id); U.sfx.select(); }
     }
@@ -186,11 +188,12 @@ RTS.input = (() => {
   }
 
   function selEnts() {
-    return RTS.render.ents().filter((e) => game.sel.has(e.id) && e.owner === game.myPlayer);
+    return RTS.render.ents().filter((e) => game.sel.has(e.id) && selectable(e));
   }
 
-  // ---- orders ----
+  // ---- orders (all silently disabled for replay spectators) ----
   function sendToSel(c, extra) {
+    if (game.mode === 'replay') return;
     const ids = selEnts().filter((e) => K[e.kind].unit).map((e) => e.id);
     if (!ids.length) return;
     game.sendCmd(Object.assign({ c, ids }, extra || {}));
@@ -198,6 +201,7 @@ RTS.input = (() => {
   }
 
   function rightCommand(sx, sy) {
+    if (game.mode === 'replay') return;
     const w = s2w(sx, sy);
     const sel = selEnts();
     if (!sel.length) return;
@@ -236,6 +240,7 @@ RTS.input = (() => {
 
   // send every idle worker back to the nearest crystal (host resolves who is idle)
   function gatherIdle() {
+    if (game.mode === 'replay') return;
     game.sendCmd({ c: 'gather' });
     U.sfx.order();
   }
@@ -345,7 +350,7 @@ RTS.input = (() => {
     const w = s2w(ts.x0, ts.y0);
     const target = RTS.render.entAt(w.x, w.y);
     const held = performance.now() - ts.t0;
-    if (target && target.owner === game.myPlayer) { clickSelect(ts.x0, ts.y0, false); return; }
+    if (target && selectable(target)) { clickSelect(ts.x0, ts.y0, false); return; }
     if (game.sel.size) {
       if (held > 450) issueAttackMove(ts.x0, ts.y0);
       else rightCommand(ts.x0, ts.y0);
