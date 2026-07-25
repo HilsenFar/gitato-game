@@ -605,11 +605,23 @@ a.gt-card:hover {
 [data-gt="rltracker"] .gt-grain { display: none; }
 
 /* ── Icons ────────────────────────────────────────────────────────────────── */
+/* The stroke defaults are repeated here on purpose. icons.svg carries its own
+   <style> block, and when a symbol is pulled in with <use href="icons.svg#…">
+   the clone lands in a shadow tree — whether the source document's stylesheet
+   reaches it is not something to bet a whole icon set on. Without a fallback the
+   failure mode is every icon rendering as a solid black blob. With one, the worst
+   case is that a handful of deliberately-solid marks (play, record, dot) come
+   through as outlines. */
 .gi {
   width: 1.15em; height: 1.15em;
   flex: none;
   color: currentColor;
   vertical-align: -.16em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .gi--lg { width: 1.5em; height: 1.5em; }
 .gi--sm { width: 1em; height: 1em; }
