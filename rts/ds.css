@@ -342,18 +342,9 @@
    ds.css into an existing page changes nothing until you ask it to.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Focus. One rule, everything that can take it. ────────────────────────── */
-.gt-focusable:focus-visible,
-.gt-btn:focus-visible,
-.gt-plate:focus-visible,
-.gt-card:focus-visible,
-.gt-chip:focus-visible,
-.gt-input:focus-visible {
-  outline: none;
-  box-shadow: var(--gt-focus-ring);
-}
-/* On a lit face the ring inverts so it never disappears into the fill. */
-.gt-plate:focus-visible { --gt-focus-ink: #07090C; --gt-focus-gap: #FFFFFF; }
+/* Focus lives at the very END of this file — see the block after the components.
+   Putting it here, before the hover rules, is what the first draft did, and hover
+   won every tie. */
 
 /* Both plate classes get used on <a> as often as on <button>, and an anchor
    arrives with an underline and the UA link colour. Reset both here rather than
@@ -657,6 +648,47 @@ a.gt-card:hover {
 
 /* ── Selection ────────────────────────────────────────────────────────────── */
 ::selection { background: var(--gt-sig); color: var(--gt-ink-on-lit); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FOCUS — last on purpose.
+
+   Two things went wrong here in the first draft, both measured in Chrome:
+
+   1. The focus block sat above the components. `.gt-btn:focus-visible` and
+      `.gt-btn:hover` are both (0,2,0), so on a tie the later rule wins — and
+      hover was later. A keyboard user whose mouse happened to rest on the
+      button got the hover shadow instead of the ring. On `.gt-btn--ghost`,
+      whose hover sets `box-shadow: none`, they got NO visible focus at all.
+      That is WCAG 2.4.7 failing in the one situation nobody tests.
+      Fix: same specificity, but last. Ties now go to focus.
+
+   2. `.gt-plate:focus-visible { --gt-focus-ink: …; --gt-focus-gap: … }` was
+      dead code. --gt-focus-ring is declared on :root, so its var()s resolve
+      there; re-declaring the two inputs on a descendant cannot reach it. Same
+      trap as the bloom tokens. Measured: the ring on a plate was byte-identical
+      to the ring at :root.
+      It is left un-inverted deliberately — a near-black gap against a lit plate
+      with a white outer edge against the dark page is the readable combination.
+      Inverting would have put a #07090C ring on a #0A0C10 substrate.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.gt-focusable:focus-visible,
+.gt-btn:focus-visible,
+.gt-plate:focus-visible,
+.gt-card:focus-visible,
+.gt-chip:focus-visible,
+.gt-input:focus-visible {
+  outline: none;
+  box-shadow: var(--gt-focus-ring);
+}
+/* Hover rules that also set box-shadow must not out-specify this. If a surface
+   adds one like `.gt-btn:hover:not(:disabled)` — (0,3,0), because :not() takes
+   its argument's specificity — it will win again. Match it here if so. */
+.gt-btn:hover:focus-visible,
+.gt-btn--ghost:hover:focus-visible,
+a.gt-card:hover:focus-visible,
+.gt-plate:hover:focus-visible {
+  box-shadow: var(--gt-focus-ring);
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MOTION PREFERENCE
