@@ -11,6 +11,13 @@
   <link rel="apple-touch-icon" href="./icons/icon-180.png" />
   <meta property="og:title" content="GITATO – HilsenFar" />
   <meta property="og:description" content="On-rails lock-on rhythm flyer. Hard genres, synesthetic visuals, play free in the browser." />
+  <!-- Brand typography. v1 asked for Rajdhani in style.css and never fetched it,
+       so the game rendered in Segoe UI. Loaded the same way beatsurfer does. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Chakra+Petch:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- GITATO Design System v2 — must come before style.css so the surface can override -->
+  <link rel="stylesheet" href="./ds.css" />
   <link rel="stylesheet" href="./style.css" />
   <script>
     // PWA: register only on real https deploys (not localhost dev, not Electron file://)
@@ -19,14 +26,14 @@
     }
   </script>
 </head>
-<body>
+<body data-gt="game">
   <canvas id="game"></canvas>
 
   <!-- HUD overlay -->
   <div id="hud" class="hidden">
     <div id="hud-top">
-      <div id="combo"><span id="combo-x">x0</span><span id="combo-label">COMBO</span></div>
-      <div id="score-wrap"><span id="score">0</span><span id="score-label">SCORE</span></div>
+      <div id="combo"><span id="combo-x" class="gt-num">x0</span><span id="combo-label">COMBO</span></div>
+      <div id="score-wrap"><span id="score" class="gt-num">0</span><span id="score-label">SCORE</span></div>
     </div>
     <div id="hud-left">
       <div id="energy-wrap"><div id="energy-bar"></div></div>
@@ -77,23 +84,23 @@
     <div id="buffer-picker">
       <span>REACTION BUFFER:</span>
       <input id="buffer-slider" type="range" min="1.0" max="15.0" step="0.1" value="6.0" />
-      <span id="buffer-value">6.0s</span>
+      <span id="buffer-value" class="gt-num">6.0s</span>
       <em>more time to read incoming objects (music + visuals unchanged)</em>
     </div>
-    <a id="apk-link" href="./gitato.apk" download>📱 GET THE ANDROID APP (.apk)</a>
+    <a id="apk-link" href="./gitato.apk" download><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-phone"></use></svg>GET THE ANDROID APP (.apk)</a>
     <div id="tribute-credit">For Far. One blood, one love, one tribe.</div>
+    <button id="demucs-btn" class="hidden"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-gear"></use></svg>ENABLE REAL KICK (Demucs)</button>
     <div id="controls-hint">
-      <span class="ch pointer-fine"><b>Mouse/Click</b> aim & fire · shoot to the beat · <b>SPACE</b> drop</span>
-      <span class="ch pointer-fine"><b>🎮 Pad</b> L-stick aim · <b>R2/A</b> fire · <b>X/□</b> drop · <b>L1</b> dodge · <b>Options</b> pause</span>
-      <span class="ch pointer-coarse"><b>👆 Touch</b> hold & drag to paint targets · release to fire · tap <b>DROP</b> when it glows</span>
+      <span class="ch pointer-fine"><b>Mouse/Click</b> aim &amp; fire · shoot to the beat · <b>SPACE</b> drop</span>
+      <span class="ch pointer-fine"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-gamepad"></use></svg><b>Pad</b> L-stick aim · <b>R2/A</b> fire · <b>X/□</b> drop · <b>L1</b> dodge · <b>Options</b> pause</span>
+      <span class="ch pointer-coarse"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-touch"></use></svg><b>Touch</b> hold &amp; drag to paint targets · release to fire · tap <b>DROP</b> when it glows</span>
     </div>
-    <button id="demucs-btn" class="hidden">⚙ ENABLE REAL KICK (Demucs)</button>
   </div>
 
   <div id="screen-local-loops" class="screen hidden">
     <div class="forge-title">LOCAL LOOPS</div>
     <div class="forge-sub">Select an auto-imported loop to play</div>
-    <div id="local-loops-list" style="display:flex; flex-direction:column; gap:8px; width:min(90vw, 600px); max-height: 60vh; overflow-y:auto; padding-right:10px; margin-top:20px; text-align:left;">
+    <div id="local-loops-list">
       <!-- Populated dynamically -->
     </div>
     <button class="btn" style="margin-top:20px; width:min(90vw, 600px);" data-action="to-title">BACK TO MENU</button>
@@ -102,10 +109,10 @@
   <div id="screen-settings" class="screen hidden">
     <div class="forge-title">SETTINGS</div>
     <div class="menu">
-      <div id="settings-reinforce" style="display:flex; flex-direction:column; gap:8px; margin-bottom: 20px; align-items:center;">
-        <span style="font-size: 14px; letter-spacing: 2px;">KICK REINFORCEMENT:</span>
-        <input id="settings-kick-slider" type="range" min="0" max="1" step="0.05" value="0" style="width: 100%; accent-color: var(--cyan); cursor: pointer;" />
-        <span style="font-size: 11px; opacity: 0.7; text-align:center;">Extra synthesized kick on top of the track — OFF by default. It follows the track's beatgrid and goes quiet in breakdowns.</span>
+      <div id="settings-reinforce">
+        <span class="setting-label">KICK REINFORCEMENT:</span>
+        <input id="settings-kick-slider" type="range" min="0" max="1" step="0.05" value="0" />
+        <span class="setting-note">Extra synthesized kick on top of the track — OFF by default. It follows the track's beatgrid and goes quiet in breakdowns.</span>
       </div>
       <button class="btn" id="settings-hitsound-btn">HIT SOUNDS: ON <span>the little blips when you lock &amp; hit targets</span></button>
       <button class="btn" data-action="to-title">BACK TO MENU</button>
@@ -120,7 +127,7 @@
       <button class="btn" data-action="pause-settings">SETTINGS</button>
       <button class="btn" data-action="quit-run">QUIT TO MENU</button>
     </div>
-    <div id="pause-hint" class="pointer-fine" style="font-size:12px; opacity:.5; letter-spacing:2px;">ESC RESUMES</div>
+    <div id="pause-hint" class="pointer-fine">ESC RESUMES</div>
   </div>
 
   <div id="screen-forge" class="screen hidden">
@@ -149,7 +156,7 @@
     <div id="jb-title">GITATO RADIO</div>
     <div id="jb-now">
       <div id="jb-genre">—</div>
-      <div id="jb-bpm">— BPM</div>
+      <div id="jb-bpm" class="gt-num">— BPM</div>
       <div id="jb-viz"><span></span><span></span><span></span><span></span><span></span></div>
     </div>
     <div id="jb-sliders">
@@ -160,13 +167,13 @@
       <label>PSYCHEDELIC <input type="range" min="0" max="100" value="30" data-vibe="psy"></label>
     </div>
     <div id="jb-controls">
-      <button class="jb-btn" data-jb="dislike" title="Dislike">👎</button>
-      <button class="jb-btn" data-jb="like" title="Like">👍</button>
-      <button class="jb-btn big" data-jb="skip" title="Skip">⏭</button>
-      <button class="jb-btn" data-jb="save" title="Save audio">💾</button>
-      <button class="jb-btn" data-jb="share" title="Share">↗</button>
+      <button class="jb-btn" data-jb="dislike" title="Dislike" aria-label="Dislike"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-thumb-down"></use></svg></button>
+      <button class="jb-btn" data-jb="like" title="Like" aria-label="Like"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-thumb-up"></use></svg></button>
+      <button class="jb-btn big" data-jb="skip" title="Skip" aria-label="Skip"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-skip-fwd"></use></svg></button>
+      <button class="jb-btn" data-jb="save" title="Save audio" aria-label="Save audio"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-save"></use></svg></button>
+      <button class="jb-btn" data-jb="share" title="Share" aria-label="Share"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-share"></use></svg></button>
     </div>
-    <div id="jb-learn">learning your taste · <span id="jb-conf">0%</span> · top: <span id="jb-top">—</span></div>
+    <div id="jb-learn">learning your taste · <span id="jb-conf" class="gt-num">0%</span> · top: <span id="jb-top">—</span></div>
     <button class="btn" data-jb="stop" style="width:min(86vw,420px)">BACK TO MENU</button>
   </div>
   <script defer src="./app.bundle.js"></script>

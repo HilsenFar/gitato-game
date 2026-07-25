@@ -1,169 +1,387 @@
-:root{ --cyan:#19e0ff; --mag:#ff2bd6; --red:#ff2b4e; --gold:#ffe08a; --bg:#04060a; }
+/* ═══════════════════════════════════════════════════════════════════════════
+   GITATO — game surface (GITATO Design System v2)
+
+   ds.css is linked BEFORE this file (see index.html) and owns the substrate,
+   the ink ramp, signals, type, radii, motion curves and the focus ring.
+   <body data-gt="game"> selects the theme: signal = cyan, signal-2 = magenta.
+
+   What stays local, and why:
+   • Legacy variable names. app.bundle.js writes `var(--cyan)` and `var(--mag)`
+     into inline styles (gamepad menu highlight; local-loop category tags), so
+     those two names must keep resolving. They are aliases onto DS tokens now,
+     not a second palette. --red / --gold / --bg follow the same rule.
+   • The HUD keeps px sizes and a glow instead of DS plates: it floats over a
+     live WebGL canvas, is pointer-events:none, and app.bundle.js overwrites
+     #combo-x colour/size/text-shadow inline every frame from its own tier table.
+   • Round shapes (reticle, spinner, DROP button, transport buttons) keep 50%.
+     That is a shape, not a value off the radius scale.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* aliases consumed by app.bundle.js — do not remove */
+  --cyan: var(--gt-cyan);
+  --mag:  var(--gt-magenta);
+  --red:  var(--gt-red);
+  --gold: var(--gt-gold);
+  --bg:   var(--gt-void);
+
+  /* Surface-specific: the menus sit on top of a live canvas, so their backdrop
+     is a scrim rather than a solid. DS substrate colours at scrim alpha. */
+  --g-scrim-in:  rgba(15, 18, 24, .88);   /* --gt-sub-1 */
+  --g-scrim-out: rgba(6, 7, 10, .97);     /* --gt-void  */
+
+  /* Tracking for lowercase descriptive lines. The DS tracking scale is built
+     for caps; sentence-case help text reads wrong at .16em. */
+  --g-track-desc: .05em;
+
+  /* HUD emission. Not a plate — a glow over rendered geometry. */
+  --g-hud-glow: 0 0 12px rgba(25, 224, 255, .5);
+}
+
 *{ margin:0; padding:0; box-sizing:border-box; }
-html,body{ width:100%; height:100%; overflow:hidden; background:var(--bg); color:#eaf6ff;
-  font-family:'Rajdhani','Segoe UI',system-ui,sans-serif; user-select:none; }
+html,body{ width:100%; height:100%; overflow:hidden;
+  background:var(--bg); color:var(--gt-ink-1);
+  font-family:var(--gt-font-ui); user-select:none; }
 #game{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
 .hidden{ display:none !important; }
+
+/* ── Focus. Rule 4 of the spec: everything clickable gets a visible ring. ──── */
+.btn:focus-visible,
+.theme-opt:focus-visible,
+.char-opt:focus-visible,
+.jb-btn:focus-visible,
+#apk-link:focus-visible,
+#demucs-btn:focus-visible,
+input[type=range]:focus-visible{
+  outline:none;
+  box-shadow:var(--gt-focus-ring);
+}
+/* The lit plates (.btn.primary, .theme-opt.active) deliberately keep the SAME
+   ring. Two reasons, both checked in the browser:
+   1. Re-declaring --gt-focus-ink/--gt-focus-gap on the element does nothing —
+      --gt-focus-ring is declared on :root, so its var() references are already
+      substituted there and only the result inherits down.
+   2. The inverted ring would be worse here anyway: white against magenta is
+      ~3.2:1, and its dark outer edge would land on a near-black scrim. The
+      default dark-gap-then-white ring reads strongly against both. */
+/* #drop-btn animates its own box-shadow when ready, and an animation beats a
+   normal declaration — so this one ring is drawn with outline instead. */
+#drop-btn:focus-visible{ outline:2px solid var(--gt-focus-ink); outline-offset:3px; }
 
 /* touch DROP button — only rendered on coarse pointers during a run */
 #drop-btn{ position:fixed; right:max(18px, env(safe-area-inset-right)); bottom:max(84px, calc(env(safe-area-inset-bottom) + 64px));
   z-index:12; width:88px; height:88px; border-radius:50%; pointer-events:auto; cursor:pointer;
-  background:rgba(10,18,30,.55); color:rgba(234,246,255,.45); font-weight:800; font-size:16px; letter-spacing:2px;
-  border:2px solid rgba(25,224,255,.25); backdrop-filter:blur(4px); transition:.2s; touch-action:none; }
-#drop-btn.ready{ color:#04121a; background:linear-gradient(135deg,var(--cyan),#fff); border-color:#fff;
-  box-shadow:0 0 34px var(--cyan); animation:dropPulse .8s ease-in-out infinite alternate; }
-@keyframes dropPulse{ to{ transform:scale(1.08); box-shadow:0 0 50px var(--cyan); } }
+  /* Opaque, per the DS note on HUD surfaces: a translucent control over a WebGL
+     canvas has no contrast guarantee, and dropping backdrop-filter also removes
+     a per-frame blur from the one surface that can least afford it.
+     ink-3 on --gt-hud measures 6.8:1 whatever the game draws behind it. */
+  background:var(--gt-hud); color:var(--gt-ink-3); font-family:var(--gt-font-ui);
+  font-weight:800; font-size:var(--gt-t-md); letter-spacing:var(--gt-track-btn);
+  border:2px solid var(--gt-cyan-dk);
+  transition:background var(--gt-d-2) var(--gt-ease-soft), color var(--gt-d-2) var(--gt-ease-soft),
+             border-color var(--gt-d-2) var(--gt-ease-soft); touch-action:none; }
+#drop-btn.ready{ color:var(--gt-ink-on-lit); background:linear-gradient(135deg,var(--gt-sig),#fff); border-color:#fff;
+  box-shadow:0 0 34px var(--gt-sig); animation:dropPulse .8s var(--gt-ease-soft) infinite alternate; }
+@keyframes dropPulse{ to{ transform:scale(1.08); box-shadow:0 0 50px var(--gt-sig); } }
 
 /* control hints per input type */
 .pointer-coarse{ display:none; }
 @media (pointer: coarse){
   .pointer-fine{ display:none; }
   .pointer-coarse{ display:flex; }
+  /* #pause-hint is .pointer-fine and is the last child of #screen-pause, so on a
+     touch device it cannot carry the centring margin. Hand it to .menu. */
+  #screen-pause .menu{ margin-bottom:auto; }
 }
 
-/* HUD */
+/* ── HUD ──────────────────────────────────────────────────────────────────── */
 #hud{ position:fixed; inset:0; pointer-events:none; z-index:10;
-  text-shadow:0 0 12px rgba(25,224,255,.5); }
+  text-shadow:var(--g-hud-glow); }
 #hud-top{ position:absolute; top:24px; left:0; right:0; display:flex; justify-content:space-between; padding:0 36px; }
 #combo{ display:flex; flex-direction:column; }
-#combo-x{ font-size:64px; font-weight:800; line-height:.9; color:#fff;
-  text-shadow:0 0 24px var(--cyan); transition:transform .08s, color .2s; }
-#combo-label{ font-size:14px; letter-spacing:4px; opacity:.7; }
+#combo-x{ font-size:52px; font-weight:800; line-height:var(--gt-lh-tight); color:var(--gt-ink-1);
+  text-shadow:0 0 24px var(--gt-cyan); transition:transform .08s var(--gt-ease-snap), color var(--gt-d-2) var(--gt-ease-soft); }
+#combo-label{ font-size:14px; letter-spacing:var(--gt-track-tag); color:var(--gt-ink-2); }
 #score-wrap{ text-align:right; }
-#score{ font-size:40px; font-weight:700; color:var(--gold); text-shadow:0 0 18px var(--gold); }
-#score-label{ display:block; font-size:13px; letter-spacing:4px; opacity:.7; }
+#score{ font-size:40px; font-weight:700; color:var(--gt-gold-ink); text-shadow:0 0 18px var(--gt-gold); }
+#score-label{ display:block; font-size:13px; letter-spacing:var(--gt-track-tag); color:var(--gt-ink-2); }
 #hud-left,#hud-right{ position:absolute; top:50%; transform:translateY(-50%); width:18px; height:42vh; }
 #hud-left{ left:30px; } #hud-right{ right:30px; }
-#energy-wrap,#drop-wrap{ position:absolute; inset:0; border:2px solid rgba(255,255,255,.25);
-  border-radius:10px; overflow:hidden; background:rgba(0,0,0,.4); }
-#energy-bar{ position:absolute; bottom:0; left:0; right:0; height:100%; background:linear-gradient(0deg,var(--red),var(--gold));
-  transition:height .12s; }
-#drop-bar{ position:absolute; bottom:0; left:0; right:0; height:0%; background:linear-gradient(0deg,var(--cyan),#fff);
-  transition:height .12s; }
+#energy-wrap,#drop-wrap{ position:absolute; inset:0; border:1px solid var(--gt-edge-lip);
+  border-radius:var(--gt-r-1); overflow:hidden; background:var(--gt-void); }
+#energy-bar{ position:absolute; bottom:0; left:0; right:0; height:100%; background:linear-gradient(0deg,var(--gt-red),var(--gt-gold));
+  transition:height .12s var(--gt-ease-soft); }
+#drop-bar{ position:absolute; bottom:0; left:0; right:0; height:0%; background:linear-gradient(0deg,var(--gt-sig),#fff);
+  transition:height .12s var(--gt-ease-soft); }
 #energy-label,#drop-label{ position:absolute; bottom:-26px; left:50%; transform:translateX(-50%);
-  font-size:11px; letter-spacing:3px; opacity:.7; white-space:nowrap; }
+  font-size:11px; letter-spacing:var(--gt-track-tag); color:var(--gt-ink-2); white-space:nowrap; }
 #judgement{ position:absolute; top:38%; left:50%; transform:translate(-50%,-50%); font-size:54px;
-  font-weight:800; opacity:0; letter-spacing:2px; }
+  font-weight:800; opacity:0; letter-spacing:var(--gt-track-hero); }
 #rank-flash{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:200px;
-  font-weight:900; opacity:0; color:#fff; }
-#rec-dot{ position:absolute; top:24px; left:50%; transform:translateX(-50%); color:var(--red);
-  font-weight:700; letter-spacing:2px; animation:blink 1s steps(2) infinite; }
+  font-weight:900; opacity:0; color:var(--gt-ink-1); }
+#rec-dot{ position:absolute; top:24px; left:50%; transform:translateX(-50%); color:var(--gt-red-ink);
+  font-weight:700; letter-spacing:var(--gt-track-label); animation:blink 1s steps(2) infinite; }
 @keyframes blink{ 50%{ opacity:.25 } }
 #theme-badge{ position:absolute; bottom:24px; left:50%; transform:translateX(-50%); font-size:13px;
-  letter-spacing:3px; opacity:.6; text-transform:uppercase; }
+  letter-spacing:var(--gt-track-label); color:var(--gt-ink-3); text-transform:uppercase; }
 
 /* Reticle */
 #reticle{ position:fixed; width:60px; height:60px; margin:-30px 0 0 -30px; z-index:11; pointer-events:none;
-  border:2px solid var(--cyan); border-radius:50%; box-shadow:0 0 18px var(--cyan), inset 0 0 12px var(--cyan);
-  transition:width .06s,height .06s,border-color .1s; }
-#reticle.charging{ border-color:var(--gold); box-shadow:0 0 26px var(--gold), inset 0 0 16px var(--gold); }
+  border:2px solid var(--gt-sig); border-radius:50%; box-shadow:0 0 18px var(--gt-sig), inset 0 0 12px var(--gt-sig);
+  transition:width .06s var(--gt-ease-out), height .06s var(--gt-ease-out), border-color var(--gt-d-1) var(--gt-ease-soft); }
+#reticle.charging{ border-color:var(--gt-gold); box-shadow:0 0 26px var(--gt-gold), inset 0 0 16px var(--gt-gold); }
 
-/* Screens */
+/* ── Screens ──────────────────────────────────────────────────────────────── */
 .screen{ position:fixed; inset:0; z-index:20; display:flex; flex-direction:column; align-items:center;
-  gap:18px; background:radial-gradient(circle at 50% 40%, rgba(8,14,24,.82), rgba(2,3,6,.96)); overflow-y:auto; overflow-x:hidden; padding: 40px 0; }
+  gap:var(--gt-s-5); background:radial-gradient(circle at 50% 40%, var(--g-scrim-in), var(--g-scrim-out));
+  overflow-y:auto; overflow-x:hidden; padding:var(--gt-s-7) 0; }
+/* Auto margins centre the stack while still allowing it to scroll when it is
+   taller than the viewport. Both edge children MUST be rendered for this to
+   work — a display:none element cannot carry the margin, and the stack then
+   drops to the bottom edge. That is why #tribute-credit / #ownership-note are
+   no longer absolutely positioned, why #demucs-btn (hidden until a desktop
+   bridge reports Demucs) was moved off the last position in #screen-title, and
+   why #screen-pause gets the coarse-pointer rule further down. */
 .screen > :first-child { margin-top: auto; }
 .screen > :last-child { margin-bottom: auto; }
 .screen::-webkit-scrollbar { width: 8px; }
-.screen::-webkit-scrollbar-thumb { background: rgba(25,224,255,.4); border-radius: 4px; }
+.screen::-webkit-scrollbar-thumb { background: var(--gt-edge-bezel); border-radius: var(--gt-r-1); }
+.screen::-webkit-scrollbar-thumb:hover { background: var(--gt-edge-lip); }
 #logo{ width:min(56vw,640px); filter:drop-shadow(0 0 40px rgba(25,224,255,.4)); }
-#subtitle{ font-size:26px; letter-spacing:10px; color:var(--mag); text-shadow:0 0 20px var(--mag); margin-top:-6px; }
-.menu{ display:flex; flex-direction:column; gap:12px; margin-top:14px; width:min(86vw,420px); }
-.btn{ pointer-events:auto; cursor:pointer; background:rgba(10,18,30,.7); color:#eaf6ff;
-  border:1.5px solid rgba(25,224,255,.4); border-radius:12px; padding:14px 18px; font-size:20px; font-weight:700;
-  letter-spacing:2px; text-align:left; transition:.15s; backdrop-filter:blur(6px); }
-.btn span{ display:block; font-size:12px; font-weight:400; opacity:.6; letter-spacing:1px; margin-top:2px; }
+#subtitle{ font-size:var(--gt-t-xl); letter-spacing:var(--gt-track-tag); color:var(--gt-sig-2-ink);
+  text-shadow:0 0 20px var(--gt-sig-2); margin-top:-6px; }
+
+.menu{ display:flex; flex-direction:column; gap:var(--gt-s-3); margin-top:var(--gt-s-3); width:min(86vw,420px); }
+
+/* Machined plate — the quiet default action. */
+.btn{ pointer-events:auto; cursor:pointer;
+  font-family:var(--gt-font-ui); font-size:var(--gt-t-lg); font-weight:700;
+  letter-spacing:var(--gt-track-btn); text-align:left; color:var(--gt-ink-1);
+  background:linear-gradient(180deg, var(--gt-pl-2), var(--gt-pl-1));
+  border:1px solid var(--gt-edge-bezel); border-radius:var(--gt-r-2);
+  padding:var(--gt-s-3) var(--gt-s-5); box-shadow:var(--gt-e-1);
+  transition:background var(--gt-d-2) var(--gt-ease-soft),
+             border-color var(--gt-d-2) var(--gt-ease-soft),
+             box-shadow var(--gt-d-2) var(--gt-ease-soft),
+             transform var(--gt-d-1) var(--gt-ease-snap); }
+/* ink-3 instead of opacity: dimming the whole element faded the frame with the
+   text and made both harder to read. */
+.btn span{ display:block; font-family:var(--gt-font-body); font-size:var(--gt-t-sm);
+  font-weight:400; letter-spacing:var(--g-track-desc); color:var(--gt-ink-3); margin-top:2px;
+  text-transform:none; }
 a.btn{ display:block; text-decoration:none; }
-.btn:hover{ border-color:var(--cyan); box-shadow:0 0 24px rgba(25,224,255,.35); transform:translateY(-1px); }
-.btn.primary{ border-color:var(--mag); background:rgba(40,8,30,.6); }
-.btn.primary:hover{ box-shadow:0 0 30px rgba(255,43,214,.4); }
-#theme-picker{ display:flex; gap:8px; align-items:center; margin-top:10px; font-size:13px; letter-spacing:2px; opacity:.85; }
-.theme-opt{ pointer-events:auto; cursor:pointer; background:rgba(10,18,30,.6); border:1px solid rgba(255,255,255,.2);
-  color:#cfe; border-radius:20px; padding:6px 14px; font-size:13px; }
-.theme-opt.active{ border-color:var(--mag); color:#fff; box-shadow:0 0 14px rgba(255,43,214,.4); }
-#tribute-credit{ position:absolute; bottom:20px; font-size:12px; letter-spacing:3px; opacity:.4; }
-#apk-link{ pointer-events:auto; margin-top:8px; font-size:12px; letter-spacing:2px; color:#7CFFB0;
-  text-decoration:none; border:1px solid rgba(124,255,176,.35); border-radius:18px; padding:7px 16px; transition:.15s; }
-#apk-link:hover{ border-color:#7CFFB0; box-shadow:0 0 16px rgba(124,255,176,.35); }
+.btn:hover{ background:linear-gradient(180deg, var(--gt-pl-3), var(--gt-pl-2));
+  border-color:var(--gt-sig); box-shadow:var(--gt-e-1), var(--gt-bloom-sm); transform:translateY(-1px); }
+.btn:active{ transform:translateY(1px); background:var(--gt-pl-4); }
+
+/* Emissive plate — the primary action. A lit face carrying dark stencil text;
+   white text fails AA on every signal colour we own, dark text passes on all. */
+.btn.primary{ color:var(--gt-ink-on-lit); background:var(--gt-sig-2); border-color:var(--gt-magenta-dk);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45),
+              inset 0 -1px 0 rgba(0,0,0,.30),
+              0 1px 2px rgba(0,0,0,.7),
+              0 0 14px -4px var(--gt-sig-2); }
+/* ink-on-lit at 85% keeps the hierarchy under the label and still measures
+   5.45:1 against the magenta face. Solid would be 6.24:1 but flattens the two
+   lines into one weight. */
+.btn.primary span{ color:rgba(7,9,12,.85); }
+.btn.primary:hover{ background:var(--gt-sig-2); border-color:var(--gt-magenta-dk);
+  filter:brightness(1.11) saturate(1.04);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45),
+              inset 0 -1px 0 rgba(0,0,0,.30),
+              0 1px 2px rgba(0,0,0,.7),
+              0 0 22px -4px var(--gt-sig-2), 0 0 52px -18px var(--gt-sig-2); }
+.btn.primary:active{ filter:brightness(.94); background:var(--gt-sig-2); }
+
+/* ── Theme picker (chips) ─────────────────────────────────────────────────── */
+#theme-picker{ display:flex; gap:var(--gt-s-2); align-items:center; margin-top:var(--gt-s-2);
+  font-family:var(--gt-font-ui); font-size:var(--gt-t-sm); letter-spacing:var(--gt-track-label);
+  color:var(--gt-ink-3); }
+.theme-opt{ pointer-events:auto; cursor:pointer;
+  font-family:var(--gt-font-ui); font-size:var(--gt-t-sm); font-weight:600;
+  letter-spacing:var(--gt-track-label); text-transform:uppercase;
+  color:var(--gt-ink-2); background:var(--gt-pl-2);
+  border:1px solid var(--gt-edge-hair); border-radius:var(--gt-r-1); padding:7px 13px;
+  transition:background var(--gt-d-2) var(--gt-ease-soft), color var(--gt-d-2) var(--gt-ease-soft),
+             border-color var(--gt-d-2) var(--gt-ease-soft); }
+.theme-opt:hover{ color:var(--gt-ink-1); border-color:var(--gt-edge-bezel); background:var(--gt-pl-3); }
+/* Selected = lit face + dark ink. The state is carried by the fill inversion,
+   not by hue alone. */
+.theme-opt.active{ color:var(--gt-ink-on-lit); background:var(--gt-sig-2); border-color:var(--gt-magenta-dk); font-weight:700; }
+
+#tribute-credit{ font-family:var(--gt-font-body); font-size:var(--gt-t-sm);
+  letter-spacing:var(--gt-track-tag); color:var(--gt-ink-3); text-align:center; }
+
+/* ── APK link / Demucs toggle ─────────────────────────────────────────────── */
+#apk-link{ pointer-events:auto; display:inline-flex; align-items:center; gap:var(--gt-s-2);
+  margin-top:var(--gt-s-2); font-family:var(--gt-font-ui); font-size:var(--gt-t-sm); font-weight:600;
+  letter-spacing:var(--gt-track-btn); color:var(--gt-green-ink); text-decoration:none;
+  background:var(--gt-pl-1); border:1px solid var(--gt-green-dk); border-radius:var(--gt-r-2);
+  padding:8px 16px;
+  transition:border-color var(--gt-d-2) var(--gt-ease-soft), box-shadow var(--gt-d-2) var(--gt-ease-soft),
+             background var(--gt-d-2) var(--gt-ease-soft); }
+#apk-link:hover{ border-color:var(--gt-green); background:var(--gt-pl-2); box-shadow:0 0 14px -4px var(--gt-green); }
 /* already inside the installed app (TWA/PWA) — don't advertise the app */
 @media all and (display-mode: fullscreen), (display-mode: standalone), (display-mode: minimal-ui){
   #apk-link{ display:none; }
 }
-#demucs-btn{ position:absolute; bottom:44px; right:24px; pointer-events:auto; cursor:pointer;
-  background:rgba(10,18,30,.6); border:1px solid rgba(25,224,255,.35); color:#cfe; border-radius:18px;
-  padding:7px 14px; font-size:12px; letter-spacing:1px; }
-#demucs-btn:hover{ border-color:var(--cyan); box-shadow:0 0 14px rgba(25,224,255,.3); }
-#demucs-btn.installed{ border-color:#7CFFB0; color:#bfffd6; }
-#pad-toast{ position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:30; background:rgba(8,14,24,.9); border:1px solid var(--cyan); color:#eaf6ff; border-radius:20px;
-  padding:8px 18px; font-size:14px; letter-spacing:1px; opacity:0; transition:opacity .3s;
-  box-shadow:0 0 20px rgba(25,224,255,.4); pointer-events:none; }
-#controls-hint{ margin-top:10px; display:flex; flex-direction:column; gap:3px; opacity:.55; font-size:11px; letter-spacing:.5px; }
-#controls-hint .ch b{ color:var(--cyan); font-weight:600; }
+#demucs-btn{ pointer-events:auto; cursor:pointer; display:inline-flex; align-items:center; gap:var(--gt-s-2);
+  margin-top:var(--gt-s-2); font-family:var(--gt-font-ui); font-size:var(--gt-t-sm); font-weight:600;
+  letter-spacing:var(--gt-track-btn); color:var(--gt-ink-2);
+  background:linear-gradient(180deg, var(--gt-pl-2), var(--gt-pl-1));
+  border:1px solid var(--gt-edge-hair); border-radius:var(--gt-r-2); padding:8px 14px;
+  box-shadow:var(--gt-e-1);
+  transition:border-color var(--gt-d-2) var(--gt-ease-soft), color var(--gt-d-2) var(--gt-ease-soft),
+             box-shadow var(--gt-d-2) var(--gt-ease-soft); }
+#demucs-btn:hover{ border-color:var(--gt-sig); color:var(--gt-ink-1); box-shadow:var(--gt-e-1), var(--gt-bloom-sm); }
+/* Installed = green ink AND a left edge bar, so the state is not colour-only. */
+#demucs-btn.installed{ position:relative; border-color:var(--gt-green-dk); color:var(--gt-green-ink); padding-left:18px; }
+#demucs-btn.installed::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--gt-green); border-radius:var(--gt-r-2) 0 0 var(--gt-r-2); }
 
-/* Reaction-buffer slider (player-controlled lead window for incoming objects) */
-#buffer-picker{ display:flex; gap:10px; align-items:center; margin-top:14px; font-size:13px; letter-spacing:2px; flex-wrap:wrap; justify-content:center; }
-#buffer-picker > span{ opacity:.7; }
-#buffer-picker em{ font-style:normal; opacity:.55; font-size:11px; letter-spacing:1px; }
-#buffer-value{ color:var(--cyan); min-width:42px; text-align:right; font-variant-numeric:tabular-nums; }
-#buffer-slider{ width:min(60vw, 320px); accent-color:var(--cyan); pointer-events:auto; cursor:pointer; }
+#pad-toast{ position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:30;
+  background:var(--gt-hud); border:1px solid var(--gt-edge-bezel); color:var(--gt-ink-1);
+  border-radius:var(--gt-r-3); padding:8px 18px;
+  font-family:var(--gt-font-ui); font-size:var(--gt-t-base); letter-spacing:var(--g-track-desc);
+  opacity:0; transition:opacity var(--gt-d-4) var(--gt-ease-out);
+  box-shadow:var(--gt-e-2); pointer-events:none; }
 
-/* Character picker */
-#char-picker{ display:flex; gap:12px; align-items:center; margin-top:14px; font-size:13px; letter-spacing:2px; }
-#char-picker > span{ opacity:.7; }
-.char-opt{ pointer-events:auto; cursor:pointer; background:rgba(10,18,30,.5); border:1.5px solid rgba(255,255,255,.18);
-  border-radius:12px; padding:6px 6px 4px; display:flex; flex-direction:column; align-items:center; gap:2px; transition:.15s; }
+#controls-hint{ margin-top:var(--gt-s-2); display:flex; flex-direction:column; gap:3px;
+  font-family:var(--gt-font-body); font-size:var(--gt-t-xs); letter-spacing:var(--g-track-desc);
+  color:var(--gt-ink-3); }
+/* No display: rule here — .pointer-fine / .pointer-coarse own that, and a
+   higher-specificity display would defeat the input-type gating. */
+#controls-hint .ch b{ color:var(--gt-sig-ink); font-weight:600; }
+#controls-hint .gi{ color:var(--gt-ink-2); margin-right:5px; }
+
+/* ── Reaction-buffer slider ───────────────────────────────────────────────── */
+#buffer-picker{ display:flex; gap:var(--gt-s-3); align-items:center; margin-top:var(--gt-s-3);
+  font-family:var(--gt-font-ui); font-size:var(--gt-t-sm); letter-spacing:var(--gt-track-label);
+  flex-wrap:wrap; justify-content:center; }
+/* :first-child, not `> span` — #buffer-value is also a direct span child and a
+   plain `> span` rule outranks its id selector on specificity. */
+#buffer-picker > span:first-child{ color:var(--gt-ink-3); }
+#buffer-picker em{ font-family:var(--gt-font-body); font-style:normal; color:var(--gt-ink-3);
+  font-size:var(--gt-t-xs); letter-spacing:var(--g-track-desc); }
+#buffer-value{ color:var(--gt-sig-ink); min-width:46px; text-align:right; }
+#buffer-slider{ width:min(60vw, 320px); accent-color:var(--gt-sig); pointer-events:auto; cursor:pointer;
+  border-radius:var(--gt-r-pill); }
+
+/* ── Character picker ─────────────────────────────────────────────────────── */
+#char-picker{ display:flex; gap:var(--gt-s-3); align-items:center; margin-top:var(--gt-s-3);
+  font-family:var(--gt-font-ui); font-size:var(--gt-t-sm); letter-spacing:var(--gt-track-label); }
+#char-picker > span{ color:var(--gt-ink-3); }
+.char-opt{ position:relative; pointer-events:auto; cursor:pointer;
+  background:var(--gt-pl-1); border:1px solid var(--gt-edge-hair); border-radius:var(--gt-r-3);
+  padding:6px 6px 8px; display:flex; flex-direction:column; align-items:center; gap:2px;
+  transition:background var(--gt-d-2) var(--gt-ease-soft), border-color var(--gt-d-2) var(--gt-ease-soft),
+             box-shadow var(--gt-d-2) var(--gt-ease-soft); }
 .char-opt img{ width:64px; height:86px; object-fit:contain; filter:drop-shadow(0 0 8px rgba(25,224,255,.3)); }
-.char-opt em{ font-style:normal; font-size:11px; letter-spacing:1px; opacity:.7; }
-.char-opt.active{ border-color:var(--cyan); box-shadow:0 0 20px rgba(25,224,255,.4); background:rgba(8,30,40,.6); }
-.char-opt.active em{ opacity:1; color:#fff; }
+.char-opt em{ font-family:var(--gt-font-ui); font-style:normal; font-size:var(--gt-t-xs);
+  letter-spacing:var(--gt-track-label); color:var(--gt-ink-3); }
+.char-opt:hover{ border-color:var(--gt-edge-bezel); background:var(--gt-pl-2); }
+.char-opt.active{ border-color:var(--gt-sig); background:var(--gt-pl-2); box-shadow:var(--gt-bloom-sm); }
+.char-opt.active em{ color:var(--gt-ink-1); }
+/* Second, non-colour channel for "selected": a lit bar under the tile. */
+.char-opt.active::after{ content:""; position:absolute; left:8px; right:8px; bottom:3px; height:2px;
+  background:var(--gt-sig); border-radius:var(--gt-r-1); }
 
 /* In-game cockpit avatar */
 #cockpit-avatar{ position:fixed; bottom:0; left:50%; transform:translateX(-50%); height:26vh; z-index:9;
-  pointer-events:none; opacity:.9; filter:drop-shadow(0 0 24px rgba(25,224,255,.35)); transition:opacity .3s; }
+  pointer-events:none; opacity:.9; filter:drop-shadow(0 0 24px rgba(25,224,255,.35));
+  transition:opacity var(--gt-d-4) var(--gt-ease-soft); }
 
-/* Forge */
-.forge-title{ font-size:44px; font-weight:800; letter-spacing:8px; color:#fff; text-shadow:0 0 30px var(--cyan); }
-.forge-sub{ font-size:18px; letter-spacing:3px; color:var(--mag); }
-#forge-spinner{ width:120px; height:120px; border:4px solid rgba(25,224,255,.15); border-top-color:var(--cyan);
-  border-radius:50%; animation:spin .8s linear infinite; margin:10px; }
+/* ── Forge ────────────────────────────────────────────────────────────────── */
+.forge-title{ font-family:var(--gt-font-ui); font-size:var(--gt-t-3xl); font-weight:800;
+  letter-spacing:var(--gt-track-head); color:var(--gt-ink-1); text-shadow:0 0 30px var(--gt-sig);
+  text-transform:uppercase; line-height:var(--gt-lh-head); text-align:center; }
+.forge-sub{ font-family:var(--gt-font-ui); font-size:var(--gt-t-md); letter-spacing:var(--gt-track-label);
+  color:var(--gt-sig-2-ink); text-align:center; }
+#forge-spinner{ width:120px; height:120px; border:4px solid var(--gt-pl-3); border-top-color:var(--gt-sig);
+  border-radius:50%; animation:spin .8s linear infinite; margin:var(--gt-s-3); }
 @keyframes spin{ to{ transform:rotate(360deg) } }
-.forge-status{ font-size:15px; opacity:.7; letter-spacing:2px; }
+.forge-status{ font-family:var(--gt-font-body); font-size:var(--gt-t-base); color:var(--gt-ink-3);
+  letter-spacing:var(--g-track-desc); }
 
-/* Results */
-#result-rank{ font-size:180px; font-weight:900; color:#fff; text-shadow:0 0 50px var(--gold); line-height:1; }
-#result-stats{ font-size:18px; opacity:.85; text-align:center; line-height:1.8; }
-#ownership-note{ position:absolute; bottom:24px; font-size:13px; letter-spacing:2px; opacity:.5; }
+/* ── Settings ─────────────────────────────────────────────────────────────── */
+#settings-reinforce{ display:flex; flex-direction:column; gap:var(--gt-s-2);
+  margin-bottom:var(--gt-s-5); align-items:center; }
+.setting-label{ font-family:var(--gt-font-ui); font-size:var(--gt-t-base); font-weight:600;
+  letter-spacing:var(--gt-track-label); text-transform:uppercase; color:var(--gt-ink-2); }
+.setting-note{ font-family:var(--gt-font-body); font-size:var(--gt-t-xs); line-height:var(--gt-lh-body);
+  letter-spacing:var(--g-track-desc); color:var(--gt-ink-3); text-align:center; }
+#settings-kick-slider{ width:100%; accent-color:var(--gt-sig); cursor:pointer; }
+#pause-hint{ font-family:var(--gt-font-ui); font-size:var(--gt-t-sm);
+  letter-spacing:var(--gt-track-label); color:var(--gt-ink-3); }
 
-/* Jukebox / GITATO RADIO */
-#jb-title{ font-size:40px; font-weight:900; letter-spacing:10px; color:#fff; text-shadow:0 0 28px var(--mag); }
+/* Local loops (list rows are built by app.bundle.js — do not restyle by tag) */
+#local-loops-list{ display:flex; flex-direction:column; gap:var(--gt-s-2); width:min(90vw, 600px);
+  max-height:60vh; overflow-y:auto; padding-right:10px; margin-top:var(--gt-s-5); text-align:left; }
+
+/* ── Results ──────────────────────────────────────────────────────────────── */
+#result-rank{ font-size:180px; font-weight:900; color:var(--gt-ink-1); text-shadow:0 0 50px var(--gt-gold);
+  line-height:var(--gt-lh-tight); }
+#result-stats{ font-family:var(--gt-font-ui); font-size:var(--gt-t-md); color:var(--gt-ink-2);
+  text-align:center; line-height:1.8; }
+#result-stats b{ color:var(--gt-ink-1); font-variant-numeric:tabular-nums; }
+#ownership-note{ font-family:var(--gt-font-body); font-size:var(--gt-t-sm);
+  letter-spacing:var(--g-track-desc); color:var(--gt-ink-3); text-align:center; }
+
+/* ── Jukebox / GITATO RADIO ───────────────────────────────────────────────── */
+#jb-title{ font-family:var(--gt-font-ui); font-size:var(--gt-t-2xl); font-weight:900;
+  letter-spacing:var(--gt-track-head); color:var(--gt-ink-1); text-shadow:0 0 28px var(--gt-sig-2); }
 #jb-now{ text-align:center; margin:6px 0 4px; }
-#jb-genre{ font-size:30px; font-weight:800; letter-spacing:4px; color:var(--cyan); text-transform:uppercase; text-shadow:0 0 20px var(--cyan); }
-#jb-bpm{ font-size:14px; letter-spacing:4px; opacity:.7; }
-#jb-viz{ display:flex; gap:6px; justify-content:center; height:48px; align-items:flex-end; margin-top:12px; }
-#jb-viz span{ width:10px; background:linear-gradient(0deg,var(--mag),var(--cyan)); border-radius:3px; height:20%; box-shadow:0 0 10px var(--cyan); animation:jbbar .6s ease-in-out infinite alternate; }
+#jb-genre{ font-family:var(--gt-font-ui); font-size:var(--gt-t-xl); font-weight:800;
+  letter-spacing:var(--gt-track-head); color:var(--gt-sig-ink); text-transform:uppercase;
+  text-shadow:0 0 20px var(--gt-sig); }
+#jb-bpm{ font-size:var(--gt-t-base); letter-spacing:var(--gt-track-tag); color:var(--gt-ink-3); }
+#jb-viz{ display:flex; gap:6px; justify-content:center; height:48px; align-items:flex-end; margin-top:var(--gt-s-3); }
+#jb-viz span{ width:10px; background:linear-gradient(0deg,var(--gt-sig-2),var(--gt-sig)); border-radius:var(--gt-r-1);
+  height:20%; box-shadow:0 0 10px var(--gt-sig); animation:jbbar .6s var(--gt-ease-soft) infinite alternate; }
 #jb-viz span:nth-child(2){ animation-delay:.1s } #jb-viz span:nth-child(3){ animation-delay:.2s }
 #jb-viz span:nth-child(4){ animation-delay:.3s } #jb-viz span:nth-child(5){ animation-delay:.15s }
 @keyframes jbbar{ to{ height:100% } }
-#jb-sliders{ display:flex; flex-direction:column; gap:8px; width:min(86vw,420px); margin-top:8px; }
-#jb-sliders label{ display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:12px; letter-spacing:2px; opacity:.85; }
-#jb-sliders input[type=range]{ flex:1; accent-color:var(--mag); cursor:pointer; }
-#jb-controls{ display:flex; gap:14px; align-items:center; margin-top:16px; }
-.jb-btn{ pointer-events:auto; cursor:pointer; width:52px; height:52px; border-radius:50%; font-size:22px;
-  background:rgba(10,18,30,.7); border:1.5px solid rgba(25,224,255,.4); color:#eaf6ff; transition:.15s; display:flex; align-items:center; justify-content:center; }
-.jb-btn:hover{ border-color:var(--cyan); box-shadow:0 0 20px rgba(25,224,255,.4); transform:translateY(-2px); }
-.jb-btn.big{ width:64px; height:64px; font-size:28px; border-color:var(--mag); }
-#jb-learn{ font-size:12px; letter-spacing:2px; opacity:.6; margin-top:14px; }
-#jb-learn span{ color:var(--cyan); }
+#jb-sliders{ display:flex; flex-direction:column; gap:var(--gt-s-2); width:min(86vw,420px); margin-top:var(--gt-s-2); }
+#jb-sliders label{ display:flex; align-items:center; justify-content:space-between; gap:var(--gt-s-3);
+  font-family:var(--gt-font-ui); font-size:var(--gt-t-sm); font-weight:600;
+  letter-spacing:var(--gt-track-label); color:var(--gt-ink-2); }
+#jb-sliders input[type=range]{ flex:1; accent-color:var(--gt-sig-2); cursor:pointer; }
+#jb-controls{ display:flex; gap:var(--gt-s-3); align-items:center; margin-top:var(--gt-s-4); }
+.jb-btn{ pointer-events:auto; cursor:pointer; width:52px; height:52px; border-radius:50%;
+  background:linear-gradient(180deg, var(--gt-pl-2), var(--gt-pl-1));
+  border:1px solid var(--gt-edge-bezel); color:var(--gt-ink-1); box-shadow:var(--gt-e-1);
+  display:flex; align-items:center; justify-content:center;
+  transition:border-color var(--gt-d-2) var(--gt-ease-soft), box-shadow var(--gt-d-2) var(--gt-ease-soft),
+             transform var(--gt-d-1) var(--gt-ease-snap); }
+.jb-btn .gi{ width:24px; height:24px; }
+.jb-btn:hover{ border-color:var(--gt-sig); box-shadow:var(--gt-e-1), var(--gt-bloom-sm); transform:translateY(-2px); }
+.jb-btn:active{ transform:translateY(1px); }
+/* The skip button is the transport's primary: larger AND on the second signal. */
+.jb-btn.big{ width:64px; height:64px; border-color:var(--gt-sig-2); }
+.jb-btn.big .gi{ width:30px; height:30px; }
+#jb-learn{ font-family:var(--gt-font-ui); font-size:var(--gt-t-sm); letter-spacing:var(--gt-track-label);
+  color:var(--gt-ink-3); margin-top:var(--gt-s-4); }
+#jb-learn span{ color:var(--gt-sig-ink); }
 
-/* ------------- mobile ------------- */
+/* ── mobile ───────────────────────────────────────────────────────────────── */
 @media (max-width: 640px){
   #hud-top{ top:14px; padding:0 16px; }
-  #combo-x{ font-size:38px; }
-  #combo-label{ font-size:11px; letter-spacing:3px; }
+  #combo-x{ font-size:34px; }
+  #combo-label{ font-size:11px; }
   #score{ font-size:26px; }
-  #score-label{ font-size:10px; letter-spacing:3px; }
+  #score-label{ font-size:10px; }
   #hud-left{ left:10px; } #hud-right{ right:10px; }
   #hud-left,#hud-right{ width:14px; height:32vh; }
-  #energy-label,#drop-label{ font-size:9px; letter-spacing:2px; }
+  /* The meter labels are centred on a 14px-wide column pinned 10px from the
+     viewport edge, so a centred label only has ~24px of room on its outer side
+     before it leaves the screen. "ENERGY" needs ~42px and was being clipped —
+     5px in v1 at 2px tracking, 8px here at --gt-track-tag (.30em) on 9px.
+     Fixed for real by anchoring each label to its meter's outer edge instead of
+     its centre, so it can only grow inwards. One rung down on the tracking
+     scale as well, since .30em is a caps-tagline value on a 9px label. */
+  #energy-label,#drop-label{ font-size:9px; letter-spacing:var(--gt-track-label); }
+  #energy-label{ left:0; right:auto; transform:none; text-align:left; }
+  #drop-label{ left:auto; right:0; transform:none; text-align:right; }
   #judgement{ font-size:32px; }
   #rank-flash{ font-size:110px; }
   #rec-dot{ top:14px; font-size:12px; }
@@ -171,37 +389,36 @@ a.btn{ display:block; text-decoration:none; }
   #cockpit-avatar{ height:16vh; }
   #reticle{ width:74px; height:74px; margin:-37px 0 0 -37px; }
 
-  .screen{ gap:12px; padding:24px 0; }
+  .screen{ gap:var(--gt-s-3); padding:var(--gt-s-5) 0; }
   #logo{ width:min(74vw,340px); }
-  #subtitle{ font-size:18px; letter-spacing:6px; }
   .menu{ gap:9px; width:min(92vw,420px); }
-  .btn{ padding:12px 16px; font-size:17px; }
+  .btn{ padding:var(--gt-s-3) var(--gt-s-4); }
   #theme-picker{ flex-wrap:wrap; justify-content:center; max-width:94vw; }
   #char-picker{ flex-wrap:wrap; justify-content:center; }
   .char-opt img{ width:52px; height:70px; }
   #buffer-picker{ max-width:94vw; }
   #buffer-slider{ width:min(70vw,320px); }
   #controls-hint{ padding:0 14px; text-align:center; align-items:center; }
-  #tribute-credit{ position:static; margin-top:6px; }
-  #demucs-btn{ position:static; margin-top:8px; }
 
-  .forge-title{ font-size:28px; letter-spacing:5px; }
-  .forge-sub{ font-size:15px; }
   #forge-spinner{ width:80px; height:80px; }
-
   #result-rank{ font-size:110px; }
-  #result-stats{ font-size:15px; padding:0 16px; }
-  #ownership-note{ position:static; margin-top:8px; padding:0 16px; text-align:center; }
-
-  #jb-title{ font-size:26px; letter-spacing:6px; }
-  #jb-genre{ font-size:22px; }
+  #result-stats{ padding:0 16px; }
+  #ownership-note{ padding:0 16px; }
   .jb-btn{ width:56px; height:56px; }
   .jb-btn.big{ width:68px; height:68px; }
 }
 
-
-
-
-
-
-
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOTION PREFERENCE
+   ds.css already collapses every duration. These rules give the decorative
+   loops a sensible resting state instead of the last frame of the keyframe.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce){
+  #forge-spinner{ animation:none; border-top-color:var(--gt-sig); border-right-color:var(--gt-sig); }
+  #jb-viz span{ animation:none; height:60%; }
+  #jb-viz span:nth-child(2){ height:85% } #jb-viz span:nth-child(3){ height:45% }
+  #jb-viz span:nth-child(4){ height:100% } #jb-viz span:nth-child(5){ height:70% }
+  #rec-dot{ animation:none; opacity:1; }
+  #drop-btn.ready{ animation:none; }
+  .btn:hover, .btn.primary:hover, .jb-btn:hover, .jb-btn:active, .btn:active{ transform:none; }
+}

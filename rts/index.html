@@ -8,11 +8,12 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="Gitato Command — Multiplayer RTS">
 <meta property="og:description" content="A neon micro-RTS in the browser. Online 1v1 with a room code, or skirmish vs the AI.">
-<meta name="theme-color" content="#050510">
+<meta name="theme-color" content="#0A0C10">
 <link rel="icon" href="../icons/icon-192.png">
+<link rel="stylesheet" href="ds.css">
 <link rel="stylesheet" href="./style.css">
 </head>
-<body>
+<body data-gt="rts">
 
 <canvas id="gl"></canvas>
 <canvas id="game"></canvas>
@@ -20,21 +21,23 @@
 <!-- top bar + command card -->
 <div id="hud">
   <div id="topbar">
-    <span id="hud-res" title="Crystals">◆ 0</span>
-    <span id="hud-sup" title="Units">⬢ 0/60</span>
+    <span id="hud-res" class="gt-num" title="Crystals">◆ 0</span>
+    <span id="hud-sup" class="gt-num" title="Units">⬢ 0/60</span>
     <span id="hud-color"></span>
-    <span id="hud-room"></span>
+    <span id="hud-room" class="gt-num"></span>
     <span id="replaybar">
       <button id="btn-rp-pause" class="tbtn">⏸</button>
-      <button id="btn-rp-1" class="tbtn active">1×</button>
-      <button id="btn-rp-2" class="tbtn">2×</button>
-      <button id="btn-rp-4" class="tbtn">4×</button>
+      <button id="btn-rp-1" class="tbtn gt-num active">1×</button>
+      <button id="btn-rp-2" class="tbtn gt-num">2×</button>
+      <button id="btn-rp-4" class="tbtn gt-num">4×</button>
     </span>
     <span class="spacer"></span>
-    <button id="btn-mine" class="tbtn" title="Send idle workers to mine (G)">⛏</button>
-    <button id="btn-amove" class="tbtn" title="Attack-move (A)">⚔</button>
-    <button id="btn-mute" class="tbtn" title="Mute (M)">🔊</button>
-    <button id="btn-menu" class="tbtn" title="Back to menu">☰</button>
+    <span class="tools">
+      <button id="btn-mine" class="tbtn gt-num" title="Send idle workers to mine (G)">⛏</button>
+      <button id="btn-amove" class="tbtn tbtn--icon" title="Attack-move (A)"><svg class="gi" aria-hidden="true" focusable="false"><use href="icons.svg#gi-sword"></use></svg></button>
+      <button id="btn-mute" class="tbtn" title="Mute (M)">🔊</button>
+      <button id="btn-menu" class="tbtn tbtn--icon" title="Back to menu"><svg class="gi" aria-hidden="true" focusable="false"><use href="icons.svg#gi-menu"></use></svg></button>
+    </span>
   </div>
   <canvas id="minimap" width="160" height="160"></canvas>
   <div id="cardwrap">
@@ -43,58 +46,67 @@
   </div>
 </div>
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 
-<!-- pause (ESC / ☰) -->
+<!-- pause (ESC / menu) -->
 <div id="pause" class="panel">
-  <h1 id="pause-title">PAUSED</h1>
-  <div class="btns">
-    <button id="btn-resume" class="mbtn">Resume</button>
-    <button id="btn-pause-restart" class="mbtn">Restart</button>
-    <button id="btn-pause-quit" class="mbtn">Quit to menu</button>
+  <div class="sheet gt-riveted">
+    <span class="gt-rivet" aria-hidden="true"></span>
+    <h1 id="pause-title" class="sheet-title">PAUSED</h1>
+    <div class="btns">
+      <button id="btn-resume" class="mbtn mbtn--primary">Resume</button>
+      <button id="btn-pause-restart" class="mbtn">Restart</button>
+      <button id="btn-pause-quit" class="mbtn mbtn--quiet">Quit to menu</button>
+    </div>
+    <p id="pause-note" class="tag"></p>
   </div>
-  <p id="pause-note" class="tag"></p>
 </div>
 
 <!-- main menu -->
 <div id="menu" class="panel">
-  <h1>GITATO<span> COMMAND</span></h1>
-  <p class="tag">A neon micro-RTS. Destroy the enemy HQ.</p>
-  <div class="btns">
-    <button id="btn-skirmish" class="mbtn">Skirmish vs AI</button>
-    <div class="diffrow">
-      <span id="diff-label">AI</span>
-      <button id="btn-diff-easy" class="tbtn">EASY</button>
-      <button id="btn-diff-normal" class="tbtn active">NORMAL</button>
-      <button id="btn-diff-hard" class="tbtn">HARD</button>
+  <div class="sheet gt-riveted">
+    <span class="gt-rivet" aria-hidden="true"></span>
+    <h1 class="sheet-logo">GITATO<span> COMMAND</span></h1>
+    <p class="tag">A neon micro-RTS. Destroy the enemy HQ.</p>
+    <div class="btns">
+      <button id="btn-skirmish" class="mbtn mbtn--primary">Skirmish vs AI</button>
+      <div class="diffrow" role="group" aria-labelledby="diff-label">
+        <span id="diff-label">AI</span>
+        <button id="btn-diff-easy" class="tbtn">EASY</button>
+        <button id="btn-diff-normal" class="tbtn active">NORMAL</button>
+        <button id="btn-diff-hard" class="tbtn">HARD</button>
+      </div>
+      <button id="btn-host" class="mbtn mbtn--online">Host Online Game</button>
+      <div class="joinrow">
+        <input id="join-code" class="gt-input gt-num" maxlength="6" placeholder="CODE" autocomplete="off" spellcheck="false">
+        <button id="btn-join" class="mbtn mbtn--online">Join Online Game</button>
+      </div>
+      <div class="replayrow">
+        <button id="btn-replay" class="mbtn mbtn--replay">Watch last game</button>
+        <button id="btn-replay-load" class="mbtn mbtn--replay">Load replay…</button>
+      </div>
+      <button id="btn-lang" class="mbtn lang mbtn--quiet">Language: EN</button>
     </div>
-    <button id="btn-host" class="mbtn">Host Online Game</button>
-    <div class="joinrow">
-      <input id="join-code" maxlength="6" placeholder="CODE" autocomplete="off" spellcheck="false">
-      <button id="btn-join" class="mbtn">Join Online Game</button>
-    </div>
-    <div class="replayrow">
-      <button id="btn-replay" class="mbtn">Watch last game</button>
-      <button id="btn-replay-load" class="mbtn">Load replay…</button>
-    </div>
-    <button id="btn-lang" class="mbtn lang">Language: EN</button>
+    <input type="file" id="replay-file" accept=".json,application/json" hidden>
+    <p id="menu-msg" role="status" aria-live="polite"></p>
+    <details>
+      <summary>How to play</summary>
+      <ul id="how-list"></ul>
+    </details>
+    <p class="foot"><a href="https://gitato.net/"><svg class="gi gi--sm" aria-hidden="true" focusable="false"><use href="icons.svg#gi-arrow-left"></use></svg>gitato.net</a></p>
   </div>
-  <input type="file" id="replay-file" accept=".json,application/json" hidden>
-  <p id="menu-msg"></p>
-  <details>
-    <summary>How to play</summary>
-    <ul id="how-list"></ul>
-  </details>
-  <p class="foot"><a href="https://gitato.net/">← gitato.net</a></p>
 </div>
 
 <!-- game over -->
 <div id="over" class="panel">
-  <h1 id="over-title">VICTORY</h1>
-  <p id="over-sub"></p>
-  <div class="btns">
-    <button id="btn-save-replay" class="mbtn" style="display:none">Save replay</button>
-    <button id="btn-over-menu" class="mbtn">Back to menu</button>
+  <div class="sheet gt-riveted">
+    <span class="gt-rivet" aria-hidden="true"></span>
+    <h1 id="over-title" class="sheet-title">VICTORY</h1>
+    <p id="over-sub"></p>
+    <div class="btns">
+      <button id="btn-save-replay" class="mbtn mbtn--replay" style="display:none">Save replay</button>
+      <button id="btn-over-menu" class="mbtn mbtn--primary">Back to menu</button>
+    </div>
   </div>
 </div>
 

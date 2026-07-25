@@ -1,25 +1,50 @@
-/* GITATO COMMAND — neon UI matching the gitato.net look */
+/* ═══════════════════════════════════════════════════════════════════════════
+   GITATO COMMAND — surface styles on top of GITATO Design System v2.
+
+   ds.css is linked FIRST and owns the substrate, ink ramp, signals, radii,
+   motion curves and the focus ring. This file only carries what is genuinely
+   specific to a full-screen RTS: the canvas stack, the HUD geometry, and the
+   one button system the menu and the HUD share.
+
+   What changed in v2 and why:
+   • Three button systems (.tbtn / .cbtn / .mbtn) became ONE construction with
+     three sizes. Same plate, same bezel, same focus ring, same press.
+   • Menu buttons are one full-width column at a fixed height, `white-space:
+     nowrap`. "Join Online Game" and "Watch last game" used to break over two
+     lines inside a two-up row; they cannot now.
+   • The room-code field was a raised plate with a 2px border — it read as a
+     button and people clicked it. It is now sunken (.gt-input).
+   • State is never carried by colour alone: the primary action is an emissive
+     plate (dark stencil text on a lit face), online actions get a solid left
+     edge bar, replay actions a striped one, "idle workers waiting" a corner
+     dot, and every active toggle flips from machined plate to lit plate.
+   • The old panel edge #1c1c40 on #050510 measured ~1.2:1 — invisible. Edges
+     are now --gt-edge-bezel (2.60:1) with --gt-edge-hair for inner dividers.
+   • HUD surfaces are opaque. A translucent panel over a WebGL canvas has no
+     contrast guarantee — the background changes every frame.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The only values that are genuinely local to this surface. Everything else
+   comes from ds.css; the old :root block (--bg/--cyan/--magenta/--orange/
+   --green/--text/--dim/--card/--line) is gone. */
 :root {
-  --bg: #050510;
-  --cyan: #00ffdc;
-  --magenta: #ff28b4;
-  --orange: #ff9628;
-  --green: #50dc78;
-  --text: #d8dcea;
-  --dim: #8a90a8;
-  --card: #0c0c24;
-  --line: #1c1c40;
+  --rts-topbar-h: 44px;
+  --rts-btn-h: 46px;      /* every menu row is exactly this tall */
+  --rts-tbtn-h: 32px;     /* every HUD / segmented control button */
+  --rts-mm: 160px;        /* minimap edge */
 }
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; overflow: hidden; }
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--gt-void);
+  color: var(--gt-ink-1);
+  font-family: var(--gt-font-ui);
   -webkit-user-select: none; user-select: none;
   touch-action: none;
 }
 
+/* ---------- canvas stack (untouched geometry) ---------- */
 #gl {
   position: fixed; inset: 0;
   width: 100vw; height: 100vh;
@@ -35,167 +60,513 @@ body {
 }
 #game.attack-cursor { cursor: cell; }
 
-/* ---------- HUD ---------- */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ONE BUTTON SYSTEM
+   .mbtn menu row · .tbtn HUD / segment · .cbtn command card.
+   Three sizes of the same machined plate — not three designs.
+   (.cbtn's class list is rewritten by js/main.js, so .cbtn must stand alone
+   without helper classes. It does.)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.mbtn, .tbtn, .cbtn {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--gt-s-2);
+  font-family: var(--gt-font-ui);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;              /* labels never break over two lines */
+  color: var(--gt-ink-1);
+  background: linear-gradient(180deg, var(--gt-pl-2), var(--gt-pl-1));
+  border: 1px solid var(--gt-edge-bezel);
+  border-radius: var(--gt-r-2);
+  box-shadow: var(--gt-e-1);
+  cursor: pointer;
+  transition: background var(--gt-d-2) var(--gt-ease-soft),
+              border-color var(--gt-d-2) var(--gt-ease-soft),
+              box-shadow var(--gt-d-2) var(--gt-ease-soft),
+              color var(--gt-d-2) var(--gt-ease-soft),
+              transform var(--gt-d-1) var(--gt-ease-snap);
+}
+.mbtn:hover, .tbtn:hover, .cbtn:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--gt-pl-3), var(--gt-pl-2));
+  border-color: var(--gt-sig);
+  box-shadow: var(--gt-e-1), var(--gt-bloom-sm);
+}
+.mbtn:active, .tbtn:active, .cbtn:active:not(:disabled) {
+  transform: translateY(1px);
+  background: var(--gt-pl-4);
+}
+
+/* Focus. There were zero :focus-visible rules on this surface. */
+.mbtn:focus-visible, .tbtn:focus-visible, .cbtn:focus-visible,
+#join-code:focus-visible, .panel summary:focus-visible, .foot a:focus-visible {
+  outline: none;
+  box-shadow: var(--gt-focus-ring);
+}
+
+/* Lit face — the primary action, and every engaged toggle. Dark stencil text
+   on an emissive plate: a change of FORM, so the state survives without
+   colour. */
+.mbtn--primary, .tbtn.active {
+  color: var(--gt-ink-on-lit);
+  background: var(--gt-sig);
+  border-color: var(--gt-sig-dk);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .45),
+    inset 0 -1px 0 rgba(0, 0, 0, .30),
+    0 1px 2px rgba(0, 0, 0, .7),
+    var(--gt-bloom-sm);
+  font-weight: 700;
+}
+.mbtn--primary:hover, .tbtn.active:hover {
+  background: var(--gt-sig);
+  border-color: var(--gt-sig-dk);
+  filter: brightness(1.13) saturate(1.04);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .45),
+    inset 0 -1px 0 rgba(0, 0, 0, .30),
+    0 1px 2px rgba(0, 0, 0, .7),
+    var(--gt-bloom);
+}
+.mbtn--primary:active, .tbtn.active:active { filter: brightness(.94); }
+/* On a lit face the ring inverts, or it disappears into the fill. */
+.mbtn--primary:focus-visible, .tbtn.active:focus-visible {
+  --gt-focus-ink: var(--gt-ink-on-lit); --gt-focus-gap: #FFFFFF;
+}
+
+/* ---------- menu rows ---------- */
+.mbtn {
+  width: 100%;
+  min-height: var(--rts-btn-h);
+  /* Symmetric. Asymmetric padding under justify-content:center moves the label
+     off the button's centre line, so a column of centred labels comes out
+     ragged — 3px right on the bar'd rows, 0 on the rest. The bar is 4px and
+     lives on the edge; 16px of padding clears it with room to spare. */
+  padding: 0 var(--gt-s-4);
+  font-size: var(--gt-t-sm);
+  letter-spacing: var(--gt-track-btn);
+  text-transform: uppercase;
+}
+/* Edge bar: the second, non-colour channel. Solid = network action,
+   striped = replay action. Rendered as ::before so js/main.js can keep
+   rewriting textContent without wiping it. */
+.mbtn--online::before, .mbtn--replay::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  border-radius: var(--gt-r-2) 0 0 var(--gt-r-2);
+}
+.mbtn--online::before { background: var(--gt-sig-2); }
+.mbtn--replay::before {
+  background: repeating-linear-gradient(135deg,
+    var(--gt-amber) 0 4px, var(--gt-sub-1) 4px 8px);
+}
+.mbtn--online:hover { border-color: var(--gt-sig-2); box-shadow: var(--gt-e-1), 0 0 14px -4px var(--gt-sig-2); }
+.mbtn--replay:hover { border-color: var(--gt-amber); box-shadow: var(--gt-e-1), 0 0 14px -4px var(--gt-amber); }
+
+/* Language toggle and "quit" are deliberately the quietest thing on screen. */
+.mbtn--quiet {
+  min-height: 36px;
+  padding: 0 var(--gt-s-4);
+  background: transparent;
+  border-color: var(--gt-edge-hair);
+  box-shadow: none;
+  color: var(--gt-ink-3);
+  font-size: var(--gt-t-xs);
+  letter-spacing: var(--gt-track-label);
+}
+.mbtn--quiet:hover {
+  background: var(--gt-pl-1);
+  border-color: var(--gt-edge-bezel);
+  box-shadow: none;
+  color: var(--gt-ink-1);
+}
+
+/* ---------- HUD / segment buttons ---------- */
+.tbtn {
+  min-height: var(--rts-tbtn-h);
+  min-width: var(--rts-tbtn-h);
+  padding: 0 var(--gt-s-3);
+  font-size: var(--gt-t-sm);
+  letter-spacing: var(--gt-track-label);
+}
+.tbtn--icon { padding: 0; }
+.tbtn .gi { width: 17px; height: 17px; }
+
+/* ---------- command card buttons ---------- */
+.cbtn {
+  justify-content: flex-start;
+  min-height: var(--rts-tbtn-h);
+  padding: 0 var(--gt-s-3);
+  gap: var(--gt-s-2);
+  font-size: var(--gt-t-sm);
+  font-weight: 700;
+  /* head, not label: these labels are sentence case ("Attack-move"), and .16em
+     on sentence case reads as damage rather than as emphasis. */
+  letter-spacing: var(--gt-track-head);
+}
+.cbtn.wide { flex-basis: 100%; justify-content: center; }
+.cbtn .cost {
+  color: var(--gt-green-ink); font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.cbtn .key {
+  color: var(--gt-ink-3); font-weight: 500; font-size: var(--gt-t-xs);
+  background: var(--gt-sub-1);
+  border: 1px solid var(--gt-edge-hair); border-radius: var(--gt-r-1);
+  padding: 1px .3em;
+}
+/* Engaged (auto-assist on) — bar + ink, not ink alone. */
+.cbtn.active { color: var(--gt-green-ink); border-color: var(--gt-green-dk); }
+.cbtn.active::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--gt-green);
+  border-radius: var(--gt-r-2) 0 0 var(--gt-r-2);
+}
+/* Owned / unaffordable is a stated condition, not a dimmer switch. The old
+   opacity:.55 faded the label and the frame together. */
+.cbtn:disabled {
+  cursor: default;
+  color: var(--gt-ink-3);
+  background: var(--gt-sub-1);
+  border-color: var(--gt-edge-hair);
+  border-style: dashed;
+  box-shadow: none;
+}
+.cbtn:disabled .cost, .cbtn:disabled .key { color: var(--gt-ink-3); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HUD
+   ═══════════════════════════════════════════════════════════════════════════ */
 #hud { display: none; }
 #hud.show { display: block; }
 
 #topbar {
   position: fixed; top: 0; left: 0; right: 0;
-  display: flex; align-items: center; gap: 1.1rem;
-  padding: .45rem .8rem;
-  background: rgba(8, 8, 26, .88);
-  border-bottom: 1px solid var(--line);
-  font-size: .95rem; font-weight: 700; letter-spacing: .04em;
+  display: flex; align-items: center; gap: var(--gt-s-4);
+  /* Wrap whole items onto a second line rather than breaking a label in half.
+     "You are CYAN" and "ROOM 4KP2Z" used to split mid-phrase on a narrow bar. */
+  flex-wrap: wrap; row-gap: var(--gt-s-1);
+  min-height: var(--rts-topbar-h);
+  padding: var(--gt-s-1) var(--gt-s-3);
+  /* Opaque: the canvas underneath changes every frame, so alpha would mean no
+     contrast guarantee at all. */
+  background: var(--gt-hud);
+  border-bottom: 1px solid var(--gt-edge-bezel);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .6), 0 6px 18px -12px rgba(0, 0, 0, .9);
+  font-size: var(--gt-t-base); font-weight: 700;
   z-index: 10;
+  /* Nudges the remaining glyph counters (◆ ⬢ ⛏ ⏸) that js/main.js writes as
+     text into monochrome text presentation, so they sit with the sprite icons
+     instead of against them. Ignored where unsupported. */
+  font-variant-emoji: text;
 }
-#topbar .spacer { flex: 1; }
-#hud-res { color: var(--green); }
-#hud-sup { color: var(--text); }
-#hud-room { color: var(--orange); font-size: .8rem; }
-.tbtn {
-  background: none; border: 1px solid var(--line); border-radius: 8px;
-  color: var(--text); font-size: 1rem; padding: .15rem .55rem; cursor: pointer;
+#topbar span, #topbar button { white-space: nowrap; }
+#topbar .spacer { flex: 1; min-width: 0; }
+/* The right-hand tool cluster wraps as one block and stays right-aligned, so
+   the menu button can never end up alone on a second row. */
+#topbar .tools { display: flex; align-items: center; gap: var(--gt-s-2); margin-left: auto; }
+#hud-res { color: var(--gt-green-ink); }
+#hud-sup { color: var(--gt-ink-1); }
+/* #hud-color's colour is set inline by js/main.js to the live player colour —
+   the same hue as that player's units on the canvas. The label spells the
+   colour out in words, so the meaning does not rest on the hue. */
+#hud-color { font-weight: 700; letter-spacing: var(--gt-track-head); }
+#hud-room { color: var(--gt-amber-ink); font-size: var(--gt-t-sm); }
+
+/* Idle workers waiting: ink + edge + a corner dot, so it is not a colour-only
+   alarm. ::after survives js/main.js rewriting the button's textContent. */
+#btn-mine.has-idle { border-color: var(--gt-green-dk); color: var(--gt-green-ink); }
+#btn-mine.has-idle::after {
+  content: ""; position: absolute; top: -3px; right: -3px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--gt-green);
+  box-shadow: 0 0 0 2px var(--gt-hud), 0 0 10px -1px var(--gt-green);
 }
-.tbtn:hover, .tbtn.active { border-color: var(--cyan); color: var(--cyan); }
-#btn-amove.active { border-color: var(--orange); color: var(--orange); }
-/* MINE button glows green while idle workers are waiting to be put to work */
-#btn-mine.has-idle { border-color: var(--green, #50dc78); color: var(--green, #50dc78); }
+/* Attack-move engaged is a MODE — lit plate, in the warn signal. */
+#btn-amove.active {
+  color: var(--gt-ink-on-lit);
+  background: var(--gt-warn);
+  border-color: var(--gt-amber-dk);
+}
+#btn-amove.active:hover { background: var(--gt-warn); border-color: var(--gt-amber-dk); }
+
+#replaybar { display: none; align-items: center; gap: var(--gt-s-1); }
+#replaybar.show { display: flex; }
 
 #minimap {
-  position: fixed; left: 10px; bottom: 10px;
-  width: 160px; height: 160px;
-  border: 1px solid var(--line); border-radius: 6px;
-  background: #05050f;
+  position: fixed; left: var(--gt-s-3); bottom: var(--gt-s-3);
+  width: var(--rts-mm); height: var(--rts-mm);
+  background: var(--gt-void);
+  border: 1px solid var(--gt-edge-bezel);
+  border-radius: var(--gt-r-2);
+  box-shadow: var(--gt-e-2);
   z-index: 10;
   cursor: pointer;
 }
 
 #cardwrap {
-  position: fixed; right: 10px; bottom: 10px;
+  position: fixed; right: var(--gt-s-3); bottom: var(--gt-s-3);
   width: min(330px, 46vw);
-  background: rgba(10, 10, 30, .92);
-  border: 1px solid var(--line); border-radius: 10px;
-  padding: .5rem;
+  background: var(--gt-hud);
+  border: 1px solid var(--gt-edge-bezel);
+  border-radius: var(--gt-r-3);
+  box-shadow: var(--gt-e-2);
+  padding: var(--gt-s-2);
   z-index: 10;
 }
 #sel-info {
-  font-size: .8rem; color: var(--dim);
-  min-height: 1.1em; margin-bottom: .35rem;
-  letter-spacing: .03em;
+  font-size: var(--gt-t-xs); color: var(--gt-ink-3);
+  letter-spacing: var(--gt-track-head);
+  min-height: 1.1em; margin-bottom: var(--gt-s-1);
 }
-#card { display: flex; flex-wrap: wrap; gap: .35rem; }
+#card { display: flex; flex-wrap: wrap; gap: var(--gt-s-1); }
 #sel-info:has(+ #card:empty) { display: none; } /* #sel-info precedes #card in the DOM */
-.cbtn {
-  background: var(--card);
-  border: 1px solid var(--line); border-radius: 8px;
-  color: var(--text); font-size: .8rem; font-weight: 700;
-  padding: .45rem .55rem; cursor: pointer;
-  display: flex; align-items: center; gap: .4rem;
-}
-.cbtn:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
-.cbtn.active { border-color: var(--green); color: var(--green); }
-.cbtn:disabled { opacity: .55; cursor: default; }
-.cbtn .cost { color: var(--green); font-weight: 400; font-size: .75rem; }
-/* ●A badge in sel-info while selected workers run auto-assist */
-.abadge { color: var(--green); font-weight: 700; }
-.qline { color: #c88aff; font-weight: 700; }
-.cbtn .key {
-  color: var(--dim); font-weight: 400; font-size: .7rem;
-  border: 1px solid var(--line); border-radius: 4px; padding: 0 .25rem;
-}
-.cbtn.wide { flex-basis: 100%; justify-content: center; }
+/* badges js/main.js injects into #sel-info */
+.abadge { color: var(--gt-green-ink); font-weight: 700; }
+.qline  { color: var(--gt-plum-ink);  font-weight: 700; font-variant-numeric: tabular-nums; }
 
+/* ---------- toast ----------
+   An emissive plate: attention carried by the lit face, legibility by dark
+   stencil ink. White on magenta measured 3.20:1 and failed; --gt-ink-on-lit
+   on the same fill measures 6.24:1. */
 #toast {
-  position: fixed; left: 50%; top: 3.2rem; transform: translateX(-50%);
-  background: rgba(20, 8, 20, .95);
-  border: 1px solid var(--magenta); border-radius: 8px;
-  color: var(--magenta);
-  padding: .4rem .9rem; font-size: .9rem; font-weight: 700;
+  position: fixed; left: 50%; top: calc(var(--rts-topbar-h) + var(--gt-s-2));
+  transform: translateX(-50%);
+  color: var(--gt-ink-on-lit);
+  background: var(--gt-sig-2);
+  border-radius: var(--gt-r-2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .4),
+    0 0 0 1px var(--gt-magenta-dk),
+    var(--gt-e-2);
+  padding: var(--gt-s-2) var(--gt-s-4);
+  font-size: var(--gt-t-sm); font-weight: 700;
+  letter-spacing: var(--gt-track-label); text-transform: uppercase;
   opacity: 0; pointer-events: none;
-  transition: opacity .25s;
+  transition: opacity var(--gt-d-3) var(--gt-ease-out);
   z-index: 30;
 }
 #toast.show { opacity: 1; }
 
-/* ---------- panels (menu / game over) ---------- */
+/* ═══════════════════════════════════════════════════════════════════════════
+   PANELS (menu / pause / game over)
+   The backdrop fills the viewport; the CONTENT sits on a real riveted sheet
+   with an edge you can see.
+   ═══════════════════════════════════════════════════════════════════════════ */
 .panel {
   position: fixed; inset: 0;
   display: none;
-  flex-direction: column; align-items: center; justify-content: center;
-  gap: 1.1rem;
-  background: radial-gradient(ellipse at 50% 30%, #0a0a24 0%, var(--bg) 70%);
+  flex-direction: column; align-items: center; justify-content: flex-start;
+  background: radial-gradient(ellipse at 50% 30%, var(--gt-sub-1) 0%, var(--gt-sub-0) 72%);
   text-align: center;
-  padding: 1.5rem;
+  padding: var(--gt-s-5) var(--gt-s-4);
+  overflow-y: auto; overscroll-behavior: contain;
+  touch-action: auto;
   z-index: 20;
 }
 .panel.show { display: flex; }
-.panel h1 {
-  font-size: clamp(2rem, 7vw, 4rem);
-  font-weight: 800; letter-spacing: .06em;
-  color: var(--cyan);
-  text-shadow: 0 0 14px rgba(0, 255, 220, .7), 0 0 50px rgba(0, 255, 220, .3);
-}
-.panel h1 span { color: var(--magenta); text-shadow: 0 0 14px rgba(255, 40, 180, .7); }
-.panel .tag { color: var(--dim); }
-.btns { display: flex; flex-direction: column; gap: .7rem; width: min(320px, 86vw); }
-.mbtn {
-  background: var(--card);
-  border: 2px solid var(--cyan); border-radius: 10px;
-  color: var(--cyan);
-  font-size: 1.05rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-  padding: .8rem 1.2rem; cursor: pointer;
-  transition: transform .12s, box-shadow .12s;
-}
-.mbtn:hover { transform: translateY(-2px); box-shadow: 0 0 24px rgba(0, 255, 220, .4); }
-.mbtn.lang {
-  border-color: var(--line); color: var(--dim);
-  font-size: .8rem; padding: .45rem .8rem;
-}
-.mbtn.lang:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: none; }
-/* AI difficulty row under the Skirmish button */
-.diffrow { display: flex; align-items: center; gap: .45rem; }
-.diffrow span {
-  color: var(--dim); font-size: .75rem; font-weight: 700; letter-spacing: .08em;
-}
-.diffrow .tbtn {
-  flex: 1; padding: .35rem .3rem;
-  font-size: .78rem; font-weight: 700; letter-spacing: .06em;
-}
-/* replay row in the menu: last game + load-from-file */
-.replayrow { display: flex; gap: .5rem; }
-.replayrow .mbtn {
-  flex: 1; border-color: var(--orange); color: var(--orange);
-  font-size: .8rem; padding: .5rem .5rem;
-}
-.replayrow .mbtn:hover { box-shadow: 0 0 24px rgba(255, 150, 40, .35); }
-/* replay controls in the topbar (⏸ / speed), shown only in replay mode */
-#replaybar { display: none; align-items: center; gap: .35rem; }
-#replaybar.show { display: flex; }
-.joinrow { display: flex; gap: .5rem; }
-.joinrow .mbtn { flex: 1; border-color: var(--magenta); color: var(--magenta); }
-.joinrow .mbtn:hover { box-shadow: 0 0 24px rgba(255, 40, 180, .4); }
-#join-code {
-  width: 6.2rem;
-  background: #05050f;
-  border: 2px solid var(--line); border-radius: 10px;
-  color: var(--text); font-size: 1.1rem; font-weight: 700;
-  text-align: center; text-transform: uppercase; letter-spacing: .2em;
-  outline: none;
-}
-#join-code:focus { border-color: var(--magenta); }
-#menu-msg { color: var(--orange); min-height: 1.3em; font-weight: 700; }
-.panel details { color: var(--dim); max-width: 560px; font-size: .9rem; }
-.panel summary { cursor: pointer; color: var(--text); margin-bottom: .5rem; }
-.panel ul { text-align: left; line-height: 1.7; list-style: none; }
-.panel li::before { content: '▸ '; color: var(--cyan); }
-.foot a { color: var(--dim); text-decoration: none; }
-.foot a:hover { color: var(--cyan); }
 
-#over-sub { color: var(--dim); }
+.sheet {
+  /* auto margins centre it when there is room and collapse to 0 when there is
+     not, so a short viewport scrolls instead of clipping the title. */
+  margin: auto 0;
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--gt-s-4);
+  width: min(400px, 100%);
+  padding: var(--gt-s-6) var(--gt-s-5) var(--gt-s-5);
+  background: linear-gradient(180deg, var(--gt-pl-1), var(--gt-sub-1));
+  border: 1px solid var(--gt-edge-bezel);
+  border-radius: var(--gt-r-4);
+  box-shadow: var(--gt-e-3);
+}
+.sheet > .gt-rivet { position: absolute; inset: 0; pointer-events: none; }
+
+.sheet-logo {
+  font-family: var(--gt-font-logo); font-weight: 900;
+  font-size: var(--gt-t-3xl);
+  letter-spacing: var(--gt-track-logo); line-height: var(--gt-lh-tight);
+  text-transform: uppercase;
+  color: var(--gt-sig-ink);
+  text-shadow: 0 0 26px rgba(0, 230, 200, .45);
+}
+.sheet-logo span {
+  color: var(--gt-sig-2-ink);
+  text-shadow: 0 0 26px rgba(255, 43, 214, .40);
+}
+.sheet-title {
+  font-family: var(--gt-font-ui); font-weight: 700;
+  font-size: var(--gt-t-2xl);
+  letter-spacing: var(--gt-track-head); line-height: var(--gt-lh-head);
+  text-transform: uppercase;
+  color: var(--gt-sig-ink);
+}
+.panel .tag {
+  font-family: var(--gt-font-body);
+  font-size: var(--gt-t-base); line-height: var(--gt-lh-body);
+  color: var(--gt-ink-2);
+  max-width: 34ch;
+}
+
+/* ---------- menu button column ---------- */
+.btns { display: flex; flex-direction: column; gap: var(--gt-s-2); width: 100%; }
+
+/* Difficulty: a sunken track holding three segments, so the row reads as one
+   control instead of three loose buttons of a different height. */
+.diffrow {
+  display: flex; align-items: center; gap: var(--gt-s-1);
+  min-height: var(--rts-btn-h);
+  padding: var(--gt-s-1) var(--gt-s-1) var(--gt-s-1) var(--gt-s-3);
+  background: var(--gt-void);
+  border: 1px solid var(--gt-edge-hair);
+  border-radius: var(--gt-r-2);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .75), inset 0 -1px 0 var(--gt-lip);
+}
+#diff-label {
+  color: var(--gt-ink-3);
+  font-size: var(--gt-t-xs); font-weight: 700;
+  letter-spacing: var(--gt-track-label);
+  margin-right: var(--gt-s-1);
+}
+.diffrow .tbtn { flex: 1; min-width: 0; padding: 0 var(--gt-s-1); font-size: var(--gt-t-xs); }
+
+/* Join and replay used to be two-up rows; the labels broke over two lines.
+   One item per row, one height, nowrap. */
+.joinrow, .replayrow { display: flex; flex-direction: column; gap: var(--gt-s-2); }
+
+/* The code field is sunken now. It used to be a raised 2px plate, i.e. it
+   looked exactly like the button beside it. */
+#join-code {
+  /* Exact height, not min-height: .gt-input's 10px block padding plus the line
+     box measures 41–42px, so a min-height of 40px (the short-viewport value of
+     --rts-btn-h) left the field 1–2px taller than the button beside it. */
+  width: 100%; height: var(--rts-btn-h);
+  padding-block: 0;
+  font-family: var(--gt-font-mono);
+  font-size: var(--gt-t-md); font-weight: 700;
+  text-align: center; text-transform: uppercase; letter-spacing: .35em;
+  text-indent: .35em;   /* re-centres text that trailing letter-spacing shifts */
+  color: var(--gt-ink-1);
+}
+#join-code::placeholder { color: var(--gt-ink-4); letter-spacing: .35em; }
+
+#menu-msg {
+  color: var(--gt-warn-ink);
+  /* height is reserved so a connection message does not shove the column */
+  min-height: 1.3em; margin-block: calc(var(--gt-s-2) * -1);
+  font-weight: 700;
+  font-size: var(--gt-t-sm); letter-spacing: var(--gt-track-label);
+}
+
+/* ---------- how-to-play ---------- */
+.panel details {
+  font-family: var(--gt-font-body);
+  font-size: var(--gt-t-sm); line-height: var(--gt-lh-body);
+  color: var(--gt-ink-2);
+  width: 100%;
+  border-top: 1px solid var(--gt-edge-hair);
+  padding-top: var(--gt-s-3);
+}
+.panel summary {
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: .55em;
+  font-family: var(--gt-font-ui); font-weight: 600;
+  font-size: var(--gt-t-xs); letter-spacing: var(--gt-track-label);
+  text-transform: uppercase;
+  color: var(--gt-ink-3);
+  border-radius: var(--gt-r-1);
+  list-style: none;
+}
+/* the UA disclosure triangle was one more icon language on this bar */
+.panel summary::-webkit-details-marker { display: none; }
+.panel summary::before {
+  content: ""; width: .5em; height: .5em;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  transition: transform var(--gt-d-2) var(--gt-ease-out);
+}
+.panel details[open] summary::before { transform: rotate(90deg); }
+.panel summary:hover { color: var(--gt-ink-1); }
+.panel ul { text-align: left; list-style: none; margin-top: var(--gt-s-3); }
+.panel li { position: relative; padding-left: 1.4em; margin-bottom: .2em; }
+/* Was the glyph '▸ ' in CSS content — now a drawn marker, so it does not
+   depend on the font that happens to be installed. */
+.panel li::before {
+  content: ""; position: absolute; left: .25em; top: .62em;
+  width: .42em; height: .42em;
+  background: var(--gt-sig);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.foot { margin-top: calc(var(--gt-s-2) * -1); }
+.foot a {
+  display: inline-flex; align-items: center; gap: .45em;
+  font-family: var(--gt-font-ui);
+  font-size: var(--gt-t-xs); letter-spacing: var(--gt-track-label);
+  text-transform: uppercase;
+  color: var(--gt-ink-3); text-decoration: none;
+  border-radius: var(--gt-r-1);
+}
+.foot a:hover { color: var(--gt-sig-ink); }
+
+#over-sub, #pause-note {
+  font-family: var(--gt-font-body);
+  font-size: var(--gt-t-base); color: var(--gt-ink-2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NARROW
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* Below this the topbar can go to two rows (replay controls + tools), so the
+   toast has to clear a double-height bar. */
+@media (max-width: 900px) {
+  #toast { top: calc(var(--rts-topbar-h) * 2); }
+}
+
+/* On a phone the counters take a row of their own, so the replay controls push
+   the bar to a THIRD row — measured 105px at 375px and at 320px, i.e. straight
+   through the 88px the rule above assumes. Only the replay case needs the extra
+   clearance, so it is asked for by state rather than paid for at every width.
+   (#toast is the next sibling of #hud; the sheet already relies on :has().) */
+@media (max-width: 640px) {
+  #hud:has(#replaybar.show) + #toast {
+    top: calc(var(--rts-topbar-h) + var(--rts-tbtn-h) * 2 + var(--gt-s-2));
+  }
+}
 
 @media (max-width: 640px) {
-  #minimap { width: 110px; height: 110px; }
-  /* wrap so the replaybar can never push ☰ off-screen (touch has no ESC) */
-  #topbar { font-size: .8rem; gap: .6rem; flex-wrap: wrap; row-gap: .25rem; }
+  :root { --rts-mm: 110px; }
+  /* tighter gaps so the replaybar is less likely to push the menu button onto
+     a second row (touch has no ESC) */
+  #topbar { gap: var(--gt-s-2); font-size: var(--gt-t-sm); }
   #cardwrap { width: 58vw; }
+  .sheet { padding: var(--gt-s-5) var(--gt-s-4) var(--gt-s-4); }
+}
+
+/* Short viewports: keep the whole menu column reachable without scrolling. */
+@media (max-height: 720px) {
+  :root { --rts-btn-h: 40px; }
+  .sheet { gap: var(--gt-s-3); padding: var(--gt-s-5) var(--gt-s-4) var(--gt-s-4); }
+  .sheet-logo { font-size: var(--gt-t-2xl); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOTION PREFERENCE
+   ds.css already collapses durations; transforms are removed outright, since a
+   1ms lift still reads as a jump.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .mbtn:active, .tbtn:active, .cbtn:active:not(:disabled) { transform: none; }
+  .mbtn--primary:hover, .tbtn.active:hover { filter: none; }
+  .panel details[open] summary::before { transition: none; }
+  #toast { transition: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORCED COLORS — plates lose their fill, so the border has to survive.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (forced-colors: active) {
+  .mbtn, .tbtn, .cbtn, #join-code { border: 1px solid ButtonBorder; }
+  .mbtn:focus-visible, .tbtn:focus-visible, .cbtn:focus-visible,
+  #join-code:focus-visible { outline: 3px solid Highlight; }
+  .mbtn--online::before, .mbtn--replay::before,
+  .cbtn.active::before, #btn-mine.has-idle::after { forced-color-adjust: none; }
 }
