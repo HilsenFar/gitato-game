@@ -1,5 +1,5 @@
 // GITATO service worker — bump VERSION on every deploy (PWA rule for all gitato sites).
-const VERSION = 'gitato-game-v19';
+const VERSION = 'gitato-game-v20';
 const SHELL = [
   './',
   './index.html',
@@ -45,10 +45,16 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(e.request)
         .then((res) => {
-          if (res.ok) caches.open(VERSION).then((c) => c.put(e.request, res.clone()));
+          // clone BEFORE the response is handed back — once it has been
+          // returned the body stream is locked and the put() fails silently
+          // (the 1.7 MB APK is a download, not shell: keep it out of the cache)
+          if (res.ok && !url.pathname.endsWith('.apk')) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }
           return res;
         })
-        .catch(() => caches.match(e.request))
+        // offline: a navigation with a query string (?utm_source=…) must still
+        // find the cached shell, and fall back to index.html
+        .catch(() => caches.match(e.request, { ignoreSearch: true })
+          .then((hit) => hit || (e.request.mode === 'navigate' ? caches.match('./index.html') : undefined)))
     );
   }
 });

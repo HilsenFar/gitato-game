@@ -131,7 +131,7 @@ RTS.input = (() => {
       case 'KeyM': {
         const m = U.toggleMute();
         const btn = document.getElementById('btn-mute');
-        if (btn) btn.textContent = m ? '🔇' : '🔊';
+        if (btn) btn.classList.toggle('is-muted', m); // swaps the speaker/mute sprite
         break;
       }
       case 'Escape':

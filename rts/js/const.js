@@ -17,6 +17,7 @@ RTS.C = {
   CARRY: 8,
   HARVEST_TIME: 2.0,
   ROOM_PREFIX: 'gitato-rts-v4-', // v4: upgrades/auto/rally-in-snapshot wire changes
+  NET_TIMEOUT_MS: 15000, // 'Connecting…' gives up after this (a hung signaling socket raises no error)
 };
 
 // kind ids are the index into this list (wire format uses the index).
@@ -104,6 +105,8 @@ RTS.STR_EN = {
   connecting: 'Connecting…',
   noRoom: 'Room not found. Check the code.',
   netFail: 'Connection failed. The signaling server may be unreachable.',
+  netTimeout: 'No answer from the signaling server. Try again.',
+  cancel: 'Cancel',
   peerGone: 'Opponent disconnected — you win by default.',
   victory: 'VICTORY',
   defeat: 'DEFEAT',
@@ -125,6 +128,11 @@ RTS.STR_EN = {
   restartGame: 'Restart',
   quitToMenu: 'Quit to menu',
   pauseMpNote: 'The game keeps running in online matches',
+  settings: 'Settings',
+  sound: 'Sound',
+  on: 'ON', off: 'OFF',
+  back: 'Back',
+  langNote: 'Changing the language reloads the page and ends the match.',
   needCrystals: 'Not enough crystals',
   atCap: 'Unit cap reached',
   invalidSpot: 'Cannot build there',
@@ -201,6 +209,8 @@ RTS.STR_DA = {
   connecting: 'Forbinder…',
   noRoom: 'Rummet blev ikke fundet. Tjek koden.',
   netFail: 'Forbindelsen mislykkedes. Signalserveren er muligvis utilgængelig.',
+  netTimeout: 'Intet svar fra signalserveren. Prøv igen.',
+  cancel: 'Annuller',
   peerGone: 'Modstanderen forsvandt — du vinder.',
   victory: 'SEJR',
   defeat: 'NEDERLAG',
@@ -222,6 +232,11 @@ RTS.STR_DA = {
   restartGame: 'Genstart',
   quitToMenu: 'Til menuen',
   pauseMpNote: 'Spillet fortsætter i online-kampe',
+  settings: 'Indstillinger',
+  sound: 'Lyd',
+  on: 'TIL', off: 'FRA',
+  back: 'Tilbage',
+  langNote: 'Sprogskift genindlæser siden og afslutter kampen.',
   needCrystals: 'Ikke nok krystaller',
   atCap: 'Enhedsloftet er nået',
   invalidSpot: 'Kan ikke bygge dér',

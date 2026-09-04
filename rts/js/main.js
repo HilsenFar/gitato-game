@@ -47,6 +47,7 @@
   }
 
   function toMenu() {
+    disarmHistory(); // every exit path passes through here, so no stale back-entry survives
     stopGame();
     paused = false; game.paused = false;
     game.mode = 'menu';
@@ -57,6 +58,7 @@
 
   function stopGame() {
     paused = false; game.paused = false; // every teardown path must resync both pause flags
+    netPending(false); // drop the 'Connecting…' timeout and its Cancel button
     if (simTimer) { clearInterval(simTimer); simTimer = null; }
     if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
     RTS.net.destroy();
@@ -129,6 +131,21 @@
 
   // ---- pause (ESC / ☰) — skirmish & replay can freeze the sim; online keeps running ----
   let paused = false;
+
+  // Android / browser back: the first press pauses, the second quits. One
+  // history entry is armed while a match runs; every exit path ends in
+  // toMenu(), which disarms it, so no stale entry is left behind.
+  let histArmed = false;
+  function armHistory() { if (!histArmed) { histArmed = true; history.pushState({ rts: true }, ''); } }
+  function disarmHistory() { if (histArmed) { histArmed = false; if (history.state && history.state.rts) history.back(); } }
+  window.addEventListener('popstate', () => {
+    if (game.mode === 'menu') return;
+    histArmed = false; // the press consumed the entry
+    if (settingsOpen()) { closeSettings(); armHistory(); return; }    // settings: one level up, to the pause menu
+    if (!paused && !game.overShown) { setPaused(true); armHistory(); } // 1st press: pause
+    else toMenu();                                                    // 2nd press (or after game over): quit
+  });
+
   function setPaused(on) {
     if (game.mode === 'menu') return;
     if (game.overShown) return; // ESC/burger must not replace the results panel after game over
@@ -147,7 +164,27 @@
     }
   }
 
+  // ---- settings (opened from the pause menu; ESC / back returns to it) ----
+  const settingsOpen = () => $('settings').classList.contains('show');
+  function syncSoundLabel() {
+    // #btn-mute mirrors U.toggleMute() (button + M key), so it is the one source of the muted state
+    const muted = $('btn-mute').classList.contains('is-muted');
+    $('btn-set-sound').textContent = STR.sound + ': ' + (muted ? STR.off : STR.on);
+  }
+  function openSettings() {
+    if (!paused) return;
+    syncSoundLabel();
+    $('set-diffrow').style.display = game.mode === 'skirmish' ? '' : 'none'; // only skirmish has a bot
+    show('settings');
+    $('btn-set-sound').focus();
+  }
+  function closeSettings() {
+    show('pause');
+    $('btn-pause-settings').focus();
+  }
+
   function beginMatch(mode, myPlayer, seed) {
+    netPending(false); // the online handshake is over
     game.mode = mode;
     game.myPlayer = myPlayer;
     game.seed = seed;
@@ -167,12 +204,15 @@
 
     show(null);
     $('hud').classList.add('show');
+    // colour by class (.p0/.p1/.replay in style.css), never a raw hex on text
+    const hc = $('hud-color');
+    hc.classList.remove('p0', 'p1', 'replay');
     if (mode === 'replay') {
-      $('hud-color').textContent = STR.replayLabel;
-      $('hud-color').style.color = '#ff9628';
+      hc.textContent = STR.replayLabel;
+      hc.classList.add('replay');
     } else {
-      $('hud-color').textContent = STR.youAre.replace('{color}', myPlayer === 0 ? STR.cyan : STR.magenta);
-      $('hud-color').style.color = RTS.PCOL[myPlayer].main;
+      hc.textContent = STR.youAre.replace('{color}', myPlayer === 0 ? STR.cyan : STR.magenta);
+      hc.classList.add('p' + myPlayer);
     }
     $('hud-room').textContent = game.roomCode && (mode === 'host' || mode === 'client') ? STR.room.replace('{code}', game.roomCode) : '';
     $('replaybar').classList.toggle('show', mode === 'replay');
@@ -196,16 +236,37 @@
         if (performance.now() - lastPeerMsg > 10000) onPeerGone();
       }, 2000);
     }
+    armHistory();
   }
 
   // ---------- online ----------
+  // 'Connecting…' can hang forever: a signaling socket that never answers
+  // raises no PeerJS error. So every pending connect carries a timeout and a
+  // Cancel button. netSettled() stops the clock once the server has answered
+  // (a host waiting for an opponent keeps Cancel); netPending(false) clears
+  // both — called from stopGame() and beginMatch().
+  let netTimer = null;
+  function netPending(on) {
+    clearTimeout(netTimer); netTimer = null;
+    $('btn-cancel').hidden = !on;
+    if (!on) return;
+    netTimer = setTimeout(() => {
+      if (game.mode !== 'menu') return;
+      stopGame();
+      game.roomCode = '';
+      $('menu-msg').textContent = STR.netTimeout;
+    }, C.NET_TIMEOUT_MS);
+  }
+  function netSettled() { clearTimeout(netTimer); netTimer = null; }
+
   function hostOnline() {
     stopGame();
     const code = U.roomCode(4);
     game.roomCode = code;
     $('menu-msg').textContent = STR.connecting;
+    netPending(true);
     RTS.net.host(code, {
-      onOpen: () => { $('menu-msg').textContent = STR.waiting.replace('{code}', code); },
+      onOpen: () => { netSettled(); $('menu-msg').textContent = STR.waiting.replace('{code}', code); },
       onPeer: () => {
         const seed = (Math.random() * 0xffffffff) >>> 0;
         RTS.net.send({ c: 'init', seed });
@@ -224,6 +285,7 @@
       onError: (kind) => {
         if (game.mode === 'menu') $('menu-msg').textContent = kind === 'taken' ? STR.connecting : STR.netFail;
         if (kind === 'taken') hostOnline(); // rare code collision: pick a new code
+        else netPending(false);
       },
     });
   }
@@ -232,8 +294,9 @@
     stopGame();
     game.roomCode = code;
     $('menu-msg').textContent = STR.connecting;
+    netPending(true);
     RTS.net.join(code, {
-      onPeer: () => { $('menu-msg').textContent = STR.waiting.replace('{code}', code); },
+      onPeer: () => { netSettled(); $('menu-msg').textContent = STR.waiting.replace('{code}', code); },
       onMsg: (m) => {
         if (!m) return;
         lastPeerMsg = performance.now();
@@ -253,6 +316,8 @@
       },
       onClose: () => onPeerGone(),
       onError: (kind) => {
+        if (game.mode !== 'menu') return; // mid-match: the heartbeat ends the game; never drop the menu over the HUD
+        netPending(false);
         $('menu-msg').textContent = kind === 'noroom' ? STR.noRoom : STR.netFail;
         show('menu');
       },
@@ -300,7 +365,7 @@
   function showGameOver(won, subtitle, draw) {
     paused = false; game.paused = false;
     $('over-title').textContent = draw ? STR.draw : won ? STR.victory : STR.defeat;
-    $('over-title').style.color = won && !draw ? RTS.PCOL[game.myPlayer].main : '#ff5050';
+    $('over-title').className = 'sheet-title ' + (won && !draw ? 'p' + game.myPlayer : 'lost');
     $('over-sub').textContent = subtitle || '';
     $('btn-save-replay').style.display = 'none'; // finishRecording unhides it
     show('over');
@@ -313,7 +378,7 @@
     paused = false; game.paused = false;
     game.replayPaused = true;
     $('over-title').textContent = STR.replayEnded;
-    $('over-title').style.color = '#ff9628';
+    $('over-title').className = 'sheet-title replay';
     const who = winner === 2 ? STR.draw
       : STR.replayWinnerIs.replace('{color}', winner === 0 ? STR.cyan : STR.magenta);
     $('over-sub').textContent = who + (drifted ? ' — ' + STR.replayDrift : '');
@@ -335,10 +400,14 @@
 
   function setReplaySpeedUI() {
     for (const sp of [1, 2, 4]) $('btn-rp-' + sp).classList.toggle('active', (game.replaySpeed || 1) === sp);
-    $('btn-rp-pause').textContent = game.replayPaused ? '⏵' : '⏸';
+    $('btn-rp-pause').classList.toggle('is-paused', !!game.replayPaused); // swaps the pause/play sprite
   }
 
   // ---------- HUD ----------
+  // sprite icon from rts/icons.svg — the card used to lead with emoji (⚔ ✋ 🔧 …)
+  const gi = (name) => `<svg class="gi" aria-hidden="true" focusable="false"><use href="icons.svg#gi-${name}"></use></svg>`;
+  const count = (id) => $(id).querySelector('.count'); // the number next to a sprite
+
   function buildCommandCard() {
     const card = $('card');
     card.innerHTML = '';
@@ -378,8 +447,8 @@
     const units = sel.filter((e) => K[e.kind].unit);
 
     if (units.length) {
-      addBtn('⚔ ' + STR.attackMove, 0, () => RTS.input.setAttackMod(true), 'wide');
-      addBtn('✋ ' + STR.stop, 0, () => RTS.input.sendToSel('stop'));
+      addBtn(gi('sword') + STR.attackMove, 0, () => RTS.input.setAttackMod(true), 'wide');
+      addBtn(gi('stop') + STR.stop, 0, () => RTS.input.sendToSel('stop'));
     }
     if (hasWorker) {
       // AUTO: toggle auto-assist on the selected workers (hotkey F)
@@ -387,12 +456,12 @@
       const fn = () => {
         game.sendCmd({ c: 'auto', ids: workerIds, on: !allWorkersAuto(workerIds) });
       };
-      game.autoBtn = addBtn('Ⓐ ' + STR.autoAssist + ' <span class="key">F</span>', 0, fn);
+      game.autoBtn = addBtn(gi('refresh') + STR.autoAssist + ' <span class="key">F</span>', 0, fn);
       game.autoIds = workerIds;
       if (allWorkersAuto(workerIds)) game.autoBtn.classList.add('active');
       game.cardHotkeys.KeyF = fn;
       for (const bk of ['rax', 'fact', 'turret', 'hq']) {
-        addBtn('🔧 ' + STR.names[bk], K[bk].cost, () => {
+        addBtn(gi('wrench') + STR.names[bk], K[bk].cost, () => {
           game.placing = { kind: bk, tx: 0, ty: 0, valid: false };
         });
       }
@@ -409,7 +478,7 @@
           game.sendCmd({ c: 'train', tid: b.id, kind: uk });
         };
         const key = trainKeys[slot];
-        addBtn('▲ ' + STR.names[uk] + (key ? ` <span class="key">${key.slice(3)}</span>` : ''), K[uk].cost, fn);
+        addBtn(gi('target') + STR.names[uk] + (key ? ` <span class="key">${key.slice(3)}</span>` : ''), K[uk].cost, fn);
         if (key) game.cardHotkeys[key] = fn;
       });
     }
@@ -446,14 +515,14 @@
       const label = { drill: STR.upDrill, stims: STR.upStims, alloys: STR.upAlloys }[key];
       const owned = (myTech & t.bit) !== 0;
       const btn = owned
-        ? addBtn('★ ' + label, STR.owned, null, '', true)
-        : addBtn('★ ' + label, t.cost, buy(t.cost, { c: 'upgrade', tid: b.id, tech: key }));
+        ? addBtn(gi('star') + label, STR.owned, null, '', true)
+        : addBtn(gi('star') + label, t.cost, buy(t.cost, { c: 'upgrade', tid: b.id, tech: key }));
       btn.title = STR.upDescr[key];
     } else if (b.kind === 'turret') {
       const owned = (b.flags & 16) !== 0;
       const btn = owned
-        ? addBtn('★ ' + STR.upTurret, STR.owned, null, '', true)
-        : addBtn('★ ' + STR.upTurret, RTS.TURRET_UP.cost, buy(RTS.TURRET_UP.cost, { c: 'upgrade', tid: b.id, tech: 'turret' }));
+        ? addBtn(gi('star') + STR.upTurret, STR.owned, null, '', true)
+        : addBtn(gi('star') + STR.upTurret, RTS.TURRET_UP.cost, buy(RTS.TURRET_UP.cost, { c: 'upgrade', tid: b.id, tech: 'turret' }));
       btn.title = STR.upDescr.turret;
     }
   }
@@ -473,15 +542,15 @@
     const snap = RTS.render.view.next;
     if (!snap) return;
     if (game.mode === 'replay') { // spectators see both economies
-      $('hud-res').textContent = '◆ ' + snap.res[0] + ' · ' + snap.res[1];
-      $('hud-sup').textContent = '⬢ ' + snap.sup[0] + ' · ' + snap.sup[1];
+      count('hud-res').textContent = snap.res[0] + ' · ' + snap.res[1];
+      count('hud-sup').textContent = snap.sup[0] + ' · ' + snap.sup[1];
     } else {
-      $('hud-res').textContent = '◆ ' + snap.res[game.myPlayer];
-      $('hud-sup').textContent = '⬢ ' + snap.sup[game.myPlayer] + '/' + C.UNIT_CAP;
+      count('hud-res').textContent = snap.res[game.myPlayer];
+      count('hud-sup').textContent = snap.sup[game.myPlayer] + '/' + C.UNIT_CAP;
     }
     const idle = idleWorkerCount();
     const mineBtn = $('btn-mine');
-    mineBtn.textContent = idle ? '⛏' + idle : '⛏';
+    count('btn-mine').textContent = idle ? String(idle) : '';
     mineBtn.classList.toggle('has-idle', idle > 0);
     // live kø-status for valgt produktionsbygning: "kø: ▲▲● 63%"
     const qline = document.getElementById('queue-line');
@@ -510,18 +579,27 @@
     const cvGame = $('game'), cvMm = $('minimap');
     RTS.render.initCanvas(cvGame, cvMm, $('gl'));
     RTS.input.init(game, cvGame, cvMm);
+    // history.state survives a reload: a match's armed back-entry must not
+    // outlive the match, or leaving the site takes one extra back press
+    if (history.state && history.state.rts) history.back();
 
     $('btn-skirmish').addEventListener('click', () => { U.audio(); U.sfx.click(); startLocal(true); });
 
-    // AI difficulty row (skirmish only; persisted in localStorage['rts-diff'])
+    // AI difficulty row (skirmish only; persisted in localStorage['rts-diff']).
+    // The same row sits in the settings panel; both stay in step.
     const diffBtns = { easy: $('btn-diff-easy'), normal: $('btn-diff-normal'), hard: $('btn-diff-hard') };
+    const setDiffBtns = { easy: $('btn-set-diff-easy'), normal: $('btn-set-diff-normal'), hard: $('btn-set-diff-hard') };
     const setDiff = (name) => {
       game.diff = name;
       try { localStorage.setItem('rts-diff', name); } catch (e) { /* storage blocked */ }
       for (const [k2, b2] of Object.entries(diffBtns)) b2.classList.toggle('active', k2 === name);
+      for (const [k2, b2] of Object.entries(setDiffBtns)) b2.classList.toggle('active', k2 === name);
+      // changed mid-skirmish (settings panel): the running bot switches presets (ai.js reads ai.d every think)
+      if (game.ai && game.mode === 'skirmish') { game.ai.diff = name; game.ai.d = RTS.AI_DIFF[name]; }
     };
     for (const k2 of Object.keys(diffBtns)) {
       diffBtns[k2].addEventListener('click', () => { U.sfx.click(); setDiff(k2); });
+      setDiffBtns[k2].addEventListener('click', () => { U.sfx.click(); setDiff(k2); });
     }
     let diff0 = 'normal';
     try {
@@ -533,6 +611,10 @@
     diffBtns.easy.textContent = STR.diffEasy;
     diffBtns.normal.textContent = STR.diffNormal;
     diffBtns.hard.textContent = STR.diffHard;
+    $('set-diff-label').textContent = STR.diffLabel;
+    setDiffBtns.easy.textContent = STR.diffEasy;
+    setDiffBtns.normal.textContent = STR.diffNormal;
+    setDiffBtns.hard.textContent = STR.diffHard;
     // replays: last game from localStorage, or any saved .json file
     $('btn-replay').addEventListener('click', () => {
       if (game.mode !== 'menu') return;
@@ -577,17 +659,33 @@
       if (code.length >= 3) joinOnline(code);
     });
     $('join-code').addEventListener('keydown', (e) => { if (e.code === 'Enter') $('btn-join').click(); });
-    game.togglePause = () => setPaused(!paused);
+    // ESC (js/input.js): settings open → back to the pause menu; otherwise pause / resume
+    game.togglePause = () => { if (settingsOpen()) closeSettings(); else setPaused(!paused); };
     $('btn-menu').addEventListener('click', () => { U.sfx.click(); if (game.mode === 'menu') return; setPaused(true); });
     $('btn-resume').addEventListener('click', () => { U.sfx.click(); setPaused(false); });
+    $('btn-pause-settings').addEventListener('click', () => { U.sfx.click(); openSettings(); });
+    $('btn-set-back').addEventListener('click', () => { U.sfx.click(); closeSettings(); });
+    $('btn-set-sound').addEventListener('click', () => {
+      const m = U.toggleMute();
+      $('btn-mute').classList.toggle('is-muted', m); // swaps the speaker/mute sprite in the HUD
+      syncSoundLabel();
+      if (!m) U.sfx.click(); // audible confirmation only when sound comes back
+    });
     $('btn-pause-restart').addEventListener('click', () => { // stopGame() resets paused + game.paused
       U.sfx.click();
       const rep = game.mode === 'replay' ? RTS.replay.current() : null;
       if (rep) startReplay(rep); else startLocal(true);
     });
     $('btn-pause-quit').addEventListener('click', () => { U.sfx.click(); toMenu(); });
+    $('btn-cancel').addEventListener('click', () => { // abandon a pending host/join
+      U.sfx.click();
+      if (game.mode !== 'menu') return;
+      stopGame();
+      game.roomCode = '';
+      $('menu-msg').textContent = '';
+    });
     $('btn-mute').addEventListener('click', () => {
-      $('btn-mute').textContent = U.toggleMute() ? '🔇' : '🔊';
+      $('btn-mute').classList.toggle('is-muted', U.toggleMute()); // swaps the speaker/mute sprite
     });
     $('btn-amove').addEventListener('click', () => RTS.input.setAttackMod(true));
     $('btn-mine').title = STR.gatherIdle + ' (G)';
@@ -599,6 +697,10 @@
       game.toast(STR.sentToMine);
     });
     $('btn-over-menu').addEventListener('click', () => { U.sfx.click(); toMenu(); });
+    // a reload or a closed tab mid-match ends the online game for both sides — ask first
+    window.addEventListener('beforeunload', (e) => {
+      if ((game.mode === 'host' || game.mode === 'client') && !game.overShown) { e.preventDefault(); e.returnValue = ''; }
+    });
 
     // menu strings from the active language table
     document.querySelector('#menu .tag').textContent = STR.tag;
@@ -622,15 +724,25 @@
     $('btn-resume').textContent = STR.resume;
     $('btn-pause-restart').textContent = STR.restartGame;
     $('btn-pause-quit').textContent = STR.quitToMenu;
+    $('btn-cancel').textContent = STR.cancel;
+    $('btn-pause-settings').textContent = STR.settings;
+    $('settings-title').textContent = STR.settings;
+    $('btn-set-back').textContent = STR.back;
+    $('settings-note').textContent = STR.langNote;
+    syncSoundLabel();
 
-    // EN/DA toggle (persisted; English is the default)
-    const langBtn = $('btn-lang');
-    langBtn.textContent = STR.language + ': ' + (RTS.LANG === 'da' ? 'DA' : 'EN');
-    langBtn.addEventListener('click', () => {
+    // EN/DA toggle (persisted; English is the default) — in the menu and in the
+    // pause-menu settings; the reload ends a running match, which the settings
+    // note says
+    const switchLang = () => {
       U.sfx.click();
       try { localStorage.setItem('rts-lang', RTS.LANG === 'da' ? 'en' : 'da'); } catch (e) { /* storage blocked */ }
       location.reload();
-    });
+    };
+    for (const lb of [$('btn-lang'), $('btn-set-lang')]) {
+      lb.textContent = STR.language + ': ' + (RTS.LANG === 'da' ? 'DA' : 'EN');
+      lb.addEventListener('click', switchLang);
+    }
 
     const frame = () => {
       RTS.input.update(1 / 60);

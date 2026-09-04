@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gitato Command — Multiplayer RTS</title>
 <meta name="description" content="Gitato Command is a free neon micro-RTS you can play in the browser. Harvest crystals, build an army, and destroy the enemy HQ — online against a friend with a room code, or against the AI.">
 <meta property="og:type" content="website">
@@ -10,6 +10,11 @@
 <meta property="og:description" content="A neon micro-RTS in the browser. Online 1v1 with a room code, or skirmish vs the AI.">
 <meta name="theme-color" content="#0A0C10">
 <link rel="icon" href="../icons/icon-192.png">
+<!-- Same URL as the @import in ds.css (one fetch), but discovered by the
+     preload scanner instead of after ds.css has been parsed. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Chakra+Petch:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="ds.css">
 <link rel="stylesheet" href="./style.css">
 </head>
@@ -21,21 +26,21 @@
 <!-- top bar + command card -->
 <div id="hud">
   <div id="topbar">
-    <span id="hud-res" class="gt-num" title="Crystals">◆ 0</span>
-    <span id="hud-sup" class="gt-num" title="Units">⬢ 0/60</span>
+    <span id="hud-res" class="gt-num" title="Crystals"><svg class="gi" aria-hidden="true" focusable="false"><use href="icons.svg#gi-crystal"></use></svg><span class="count">0</span></span>
+    <span id="hud-sup" class="gt-num" title="Units"><svg class="gi" aria-hidden="true" focusable="false"><use href="icons.svg#gi-hex"></use></svg><span class="count">0/60</span></span>
     <span id="hud-color"></span>
     <span id="hud-room" class="gt-num"></span>
     <span id="replaybar">
-      <button id="btn-rp-pause" class="tbtn">⏸</button>
+      <button id="btn-rp-pause" class="tbtn tbtn--icon" title="Pause"><svg class="gi gi-run" aria-hidden="true" focusable="false"><use href="icons.svg#gi-pause"></use></svg><svg class="gi gi-paused" aria-hidden="true" focusable="false"><use href="icons.svg#gi-play"></use></svg></button>
       <button id="btn-rp-1" class="tbtn gt-num active">1×</button>
       <button id="btn-rp-2" class="tbtn gt-num">2×</button>
       <button id="btn-rp-4" class="tbtn gt-num">4×</button>
     </span>
     <span class="spacer"></span>
     <span class="tools">
-      <button id="btn-mine" class="tbtn gt-num" title="Send idle workers to mine (G)">⛏</button>
+      <button id="btn-mine" class="tbtn gt-num" title="Send idle workers to mine (G)"><svg class="gi" aria-hidden="true" focusable="false"><use href="icons.svg#gi-pick"></use></svg><span class="count"></span></button>
       <button id="btn-amove" class="tbtn tbtn--icon" title="Attack-move (A)"><svg class="gi" aria-hidden="true" focusable="false"><use href="icons.svg#gi-sword"></use></svg></button>
-      <button id="btn-mute" class="tbtn" title="Mute (M)">🔊</button>
+      <button id="btn-mute" class="tbtn tbtn--icon" title="Mute (M)"><svg class="gi gi-on" aria-hidden="true" focusable="false"><use href="icons.svg#gi-speaker"></use></svg><svg class="gi gi-off" aria-hidden="true" focusable="false"><use href="icons.svg#gi-mute"></use></svg></button>
       <button id="btn-menu" class="tbtn tbtn--icon" title="Back to menu"><svg class="gi" aria-hidden="true" focusable="false"><use href="icons.svg#gi-menu"></use></svg></button>
     </span>
   </div>
@@ -56,9 +61,30 @@
     <div class="btns">
       <button id="btn-resume" class="mbtn mbtn--primary">Resume</button>
       <button id="btn-pause-restart" class="mbtn">Restart</button>
+      <button id="btn-pause-settings" class="mbtn">Settings</button>
       <button id="btn-pause-quit" class="mbtn mbtn--quiet">Quit to menu</button>
     </div>
     <p id="pause-note" class="tag"></p>
+  </div>
+</div>
+
+<!-- settings (opened from the pause menu; ESC / back returns to it) -->
+<div id="settings" class="panel">
+  <div class="sheet gt-riveted">
+    <span class="gt-rivet" aria-hidden="true"></span>
+    <h1 id="settings-title" class="sheet-title">SETTINGS</h1>
+    <div class="btns">
+      <button id="btn-set-sound" class="mbtn">Sound: ON</button>
+      <div id="set-diffrow" class="diffrow" role="group" aria-labelledby="set-diff-label">
+        <span id="set-diff-label">AI</span>
+        <button id="btn-set-diff-easy" class="tbtn">EASY</button>
+        <button id="btn-set-diff-normal" class="tbtn active">NORMAL</button>
+        <button id="btn-set-diff-hard" class="tbtn">HARD</button>
+      </div>
+      <button id="btn-set-lang" class="mbtn lang mbtn--quiet">Language: EN</button>
+      <button id="btn-set-back" class="mbtn">Back</button>
+    </div>
+    <p id="settings-note" class="tag"></p>
   </div>
 </div>
 
@@ -89,6 +115,7 @@
     </div>
     <input type="file" id="replay-file" accept=".json,application/json" hidden>
     <p id="menu-msg" role="status" aria-live="polite"></p>
+    <button id="btn-cancel" class="mbtn mbtn--quiet" hidden>Cancel</button>
     <details>
       <summary>How to play</summary>
       <ul id="how-list"></ul>

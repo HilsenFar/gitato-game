@@ -54,6 +54,7 @@
   --gt-pl-2:  #1B2029;   /* control fill, raised plate                      */
   --gt-pl-3:  #232A35;   /* hover fill  ← worst-case background for contrast */
   --gt-pl-4:  #2C3441;   /* active / pressed fill                           */
+  --gt-hud:   #0C0F15;   /* opaque HUD fill over live canvas — see .gt-hud  */
 
   /* ═══ EDGES ══════════════════════════════════════════════════════════════
      Opaque, not rgba. v1's translucent hairlines drifted between surfaces and
@@ -68,7 +69,7 @@
      Measured against --gt-pl-3, the lightest surface any text can land on, so
      these are worst-case numbers, not best-case ones. */
   --gt-ink-1: #E8ECF2;   /* primary          12.18:1 on pl-3  AAA           */
-  --gt-ink-2: #B9C2CF;   /* body             7.84:1  on pl-3  AAA           */
+  --gt-ink-2: #B9C2CF;   /* body             8.03:1  on pl-3  AAA           */
   --gt-ink-3: #909AA9;   /* meta, captions   5.08:1  on pl-3  AA            */
   --gt-ink-4: #6B7484;   /* NEVER TEXT       3.06:1 — dividers, inert glyphs */
   --gt-ink-on-lit: #07090C;  /* the only colour allowed on a lit face       */
@@ -142,6 +143,8 @@
   --gt-track-logo:  .12em;   /* logotype — brand signature  */
   --gt-track-head:  .08em;   /* 19-30px headings            */
   --gt-track-hero:  .05em;   /* 52-118px display            */
+  --gt-track-serial: .14em;  /* 11px mono serials           */
+  --gt-track-badge:  .10em;  /* 11px mono badges            */
 
   --gt-lh-tight: 1.05;
   --gt-lh-head:  1.2;
@@ -193,15 +196,8 @@
 
   /* ═══ HAZARD & TEXTURE ═══════════════════════════════════════════════════ */
   --gt-hz-pitch: 18px;
-  --gt-hz-caution: repeating-linear-gradient(135deg,
-      var(--gt-yellow) 0 calc(var(--gt-hz-pitch) / 2),
-      #101319 calc(var(--gt-hz-pitch) / 2) var(--gt-hz-pitch));
-  --gt-hz-danger: repeating-linear-gradient(135deg,
-      var(--gt-red) 0 calc(var(--gt-hz-pitch) / 2),
-      #101319 calc(var(--gt-hz-pitch) / 2) var(--gt-hz-pitch));
-  --gt-hz-inert: repeating-linear-gradient(135deg,
-      var(--gt-edge-hair) 0 calc(var(--gt-hz-pitch) / 2),
-      transparent calc(var(--gt-hz-pitch) / 2) var(--gt-hz-pitch));
+  /* The --gt-hz-* gradients are declared below with bloom, NOT here — see the
+     note under the theme block. */
 
   /* ═══ PATTERN CHANNEL ════════════════════════════════════════════════════
      For charts, meters and team colours, i.e. anywhere several series sit side
@@ -248,7 +244,7 @@
      single biggest accessibility gap v2 closes. */
   --gt-focus-ink: #FFFFFF;
   --gt-focus-gap: var(--gt-sub-0);
-  --gt-focus-ring: 0 0 0 2px var(--gt-focus-gap), 0 0 0 4px var(--gt-focus-ink);
+  /* --gt-focus-ring is declared below with bloom, NOT here — same trap. */
 
   /* ═══ LAYOUT ═════════════════════════════════════════════════════════════ */
   --gt-wrap:      1120px;
@@ -327,6 +323,13 @@
 
    The fix is to re-declare bloom on the same elements that re-declare the
    signal, so the substitution happens with the right value in scope.
+
+   The same applies to EVERY token whose value contains var(): the focus ring
+   (reads --gt-focus-gap/--gt-focus-ink) and the hazard gradients (read
+   --gt-hz-pitch and the signal colours) live here for the same reason. A token
+   that is declared only on :root and built from var() cannot be retuned by a
+   descendant — measured: --gt-hz-pitch set to 40px on body left .gt-hazard at
+   9px/18px while the gradients sat in :root.
    ═══════════════════════════════════════════════════════════════════════════ */
 :root,
 [data-gt],
@@ -335,6 +338,16 @@
   --gt-bloom-sm: 0 0 14px -4px var(--gt-sig);
   --gt-bloom:    0 0 22px -4px var(--gt-sig), 0 0 52px -18px var(--gt-sig);
   --gt-bloom-lg: 0 0 30px -4px var(--gt-sig), 0 0 90px -22px var(--gt-sig);
+  --gt-focus-ring: 0 0 0 2px var(--gt-focus-gap), 0 0 0 4px var(--gt-focus-ink);
+  --gt-hz-caution: repeating-linear-gradient(135deg,
+      var(--gt-yellow) 0 calc(var(--gt-hz-pitch) / 2),
+      #101319 calc(var(--gt-hz-pitch) / 2) var(--gt-hz-pitch));
+  --gt-hz-danger: repeating-linear-gradient(135deg,
+      var(--gt-red) 0 calc(var(--gt-hz-pitch) / 2),
+      #101319 calc(var(--gt-hz-pitch) / 2) var(--gt-hz-pitch));
+  --gt-hz-inert: repeating-linear-gradient(135deg,
+      var(--gt-edge-hair) 0 calc(var(--gt-hz-pitch) / 2),
+      transparent calc(var(--gt-hz-pitch) / 2) var(--gt-hz-pitch));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -410,12 +423,24 @@
   box-shadow: var(--gt-e-1), var(--gt-bloom-sm);
 }
 .gt-btn:active { transform: translateY(1px); background: var(--gt-pl-4); }
-.gt-btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
+/* Disabled is a stated condition, not a dimmer switch: ink-3 on pl-1 (6.25:1)
+   instead of opacity .45, which measured 3.72:1 and dimmed the frame with the
+   text. The :hover/:active matches are (0,3,0) so the hover rule above cannot
+   light a disabled button. */
+.gt-btn[disabled], .gt-btn[aria-disabled="true"],
+.gt-btn[disabled]:hover, .gt-btn[disabled]:active,
+.gt-btn[aria-disabled="true"]:hover, .gt-btn[aria-disabled="true"]:active {
+  color: var(--gt-ink-3);
+  background: var(--gt-pl-1);
+  border-color: var(--gt-edge-hair);
+  box-shadow: none;
+  cursor: not-allowed; transform: none;
+}
 /* Left edge bar — a second, non-colour channel for "this one is active". */
 .gt-btn--marked::before {
-  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  content: ""; position: absolute; inset-inline-start: 0; inset-block: 0; width: 3px;
   background: var(--gt-sig); opacity: .85;
-  border-radius: var(--gt-r-2) 0 0 var(--gt-r-2);
+  border-start-start-radius: var(--gt-r-2); border-end-start-radius: var(--gt-r-2);
 }
 .gt-btn--ghost {
   background: transparent; border-color: var(--gt-edge-hair); box-shadow: none;
@@ -492,7 +517,7 @@ a.gt-card:hover {
   padding: 3px 8px;
   font-family: var(--gt-font-mono);
   font-size: var(--gt-t-xs); font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: var(--gt-track-badge);
   color: var(--gt-ink-3);
   background: var(--gt-sub-1);
   border: 1px solid var(--gt-edge-hair);
@@ -512,7 +537,9 @@ a.gt-card:hover {
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, .7);
   transition: border-color var(--gt-d-2) var(--gt-ease-soft);
 }
-.gt-input::placeholder { color: var(--gt-ink-4); }
+/* ink-3, not ink-4: placeholder is text and measured 4.27:1 on void with ink-4.
+   ink-3 measures 7.08:1 on void and 6.25:1 on pl-1. */
+.gt-input::placeholder { color: var(--gt-ink-3); }
 .gt-input:hover { border-color: var(--gt-edge-bezel); }
 .gt-input:focus-visible { border-color: var(--gt-sig); }
 
@@ -544,10 +571,10 @@ a.gt-card:hover {
   background: var(--gt-edge-lip); box-shadow: 0 1px 0 rgba(0, 0, 0, .7);
   pointer-events: none;
 }
-.gt-riveted::before { left: 6px; top: 6px; }
-.gt-riveted::after  { right: 6px; top: 6px; }
-.gt-riveted > .gt-rivet::before { left: 6px; bottom: 6px; }
-.gt-riveted > .gt-rivet::after  { right: 6px; bottom: 6px; }
+.gt-riveted::before { inset-inline-start: 6px; inset-block-start: 6px; }
+.gt-riveted::after  { inset-inline-end: 6px;   inset-block-start: 6px; }
+.gt-riveted > .gt-rivet::before { inset-inline-start: 6px; inset-block-end: 6px; }
+.gt-riveted > .gt-rivet::after  { inset-inline-end: 6px;   inset-block-end: 6px; }
 
 /* ── HUD over live canvas ─────────────────────────────────────────────────────
    A translucent panel over a WebGL surface has no contrast guarantee: whatever
@@ -571,7 +598,6 @@ a.gt-card:hover {
   box-shadow: var(--gt-e-1);
   backdrop-filter: none;
 }
-:root { --gt-hud: #0C0F15; }
 
 /* ── Texture overlay ──────────────────────────────────────────────────────────
    Both layers sit BELOW content, not over it. An overlay-blended grain on top of
@@ -641,13 +667,18 @@ a.gt-card:hover {
 /* ink-3, not ink-4. The first draft used ink-4 here and measured 4.15:1 — under
    AA. The rule that ink-4 never carries text applies to this file too. */
 .gt-serial { font-family: var(--gt-font-mono); font-size: var(--gt-t-xs);
-             letter-spacing: .14em; color: var(--gt-ink-3); }
+             letter-spacing: var(--gt-track-serial); color: var(--gt-ink-3); }
 /* Numerals that change in place — scores, timers, meters — must not reflow. */
 .gt-num { font-family: var(--gt-font-ui); font-variant-numeric: tabular-nums;
           font-feature-settings: "tnum" 1; letter-spacing: .02em; }
 
 /* ── Selection ────────────────────────────────────────────────────────────── */
-::selection { background: var(--gt-sig); color: var(--gt-ink-on-lit); }
+/* Scoped to a themed subtree, so a page that has not opted in keeps the UA
+   highlight — a bare ::selection restyled every page this file was dropped into. */
+[data-gt] ::selection, [data-gt]::selection,
+[class*="gt-"] ::selection, [class*="gt-"]::selection {
+  background: var(--gt-sig); color: var(--gt-ink-on-lit);
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    FOCUS — last on purpose.
@@ -663,13 +694,24 @@ a.gt-card:hover {
       Fix: same specificity, but last. Ties now go to focus.
 
    2. `.gt-plate:focus-visible { --gt-focus-ink: …; --gt-focus-gap: … }` was
-      dead code. --gt-focus-ring is declared on :root, so its var()s resolve
-      there; re-declaring the two inputs on a descendant cannot reach it. Same
+      dead code. --gt-focus-ring was declared on :root, so its var()s resolved
+      there; re-declaring the two inputs on a descendant could not reach it. Same
       trap as the bloom tokens. Measured: the ring on a plate was byte-identical
       to the ring at :root.
-      It is left un-inverted deliberately — a near-black gap against a lit plate
-      with a white outer edge against the dark page is the readable combination.
-      Inverting would have put a #07090C ring on a #0A0C10 substrate.
+      So the ring is written out at the use site below (the var()s resolve on the
+      focused element itself), and --gt-focus-ring is re-declared in the theme
+      block for surfaces that read the token. A control that sets
+      --gt-focus-ink/--gt-focus-gap on itself now gets what it asked for.
+      The polarity stays un-inverted deliberately — a near-black gap against a
+      lit plate with a white outer edge against the dark page is the readable
+      combination. Inverting puts a #07090C ring on a #0A0C10 substrate (1.02:1)
+      and a white band on a cyan fill (1.60:1). Do not invert it.
+
+   3. clip-path clips an element's OWN outer box-shadow, so the outer ring is
+      never painted on .gt-plate — measured: every pixel 1-4px outside the edge
+      stayed the page colour, in every theme, --gt-r-cut: 0 included. Lit faces
+      get the ring drawn inside the edge instead: white at the edge, the dark
+      gap against the lit fill. Measured visible at +0/+1px and +3px.
    ═══════════════════════════════════════════════════════════════════════════ */
 .gt-focusable:focus-visible,
 .gt-btn:focus-visible,
@@ -678,7 +720,7 @@ a.gt-card:hover {
 .gt-chip:focus-visible,
 .gt-input:focus-visible {
   outline: none;
-  box-shadow: var(--gt-focus-ring);
+  box-shadow: 0 0 0 2px var(--gt-focus-gap), 0 0 0 4px var(--gt-focus-ink);
 }
 /* Hover rules that also set box-shadow must not out-specify this. If a surface
    adds one like `.gt-btn:hover:not(:disabled)` — (0,3,0), because :not() takes
@@ -687,7 +729,13 @@ a.gt-card:hover {
 .gt-btn--ghost:hover:focus-visible,
 a.gt-card:hover:focus-visible,
 .gt-plate:hover:focus-visible {
-  box-shadow: var(--gt-focus-ring);
+  box-shadow: 0 0 0 2px var(--gt-focus-gap), 0 0 0 4px var(--gt-focus-ink);
+}
+/* Lit faces — see point 3 above. One ring for every lit control. */
+.gt-plate:focus-visible,
+.gt-plate:hover:focus-visible,
+.gt-chip--lit:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--gt-focus-ink), inset 0 0 0 4px var(--gt-ink-on-lit);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -702,7 +750,7 @@ a.gt-card:hover:focus-visible,
     transition-duration: .01ms !important;
     scroll-behavior: auto !important;
   }
-  .gt-plate:hover, .gt-btn:active, a.gt-card:hover { transform: none; }
+  .gt-plate:hover, .gt-plate:active, .gt-btn:active, a.gt-card:hover { transform: none; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -714,6 +762,26 @@ a.gt-card:hover:focus-visible,
     border: 1px solid ButtonBorder;
     clip-path: none;
   }
-  .gt-plate:focus-visible, .gt-btn:focus-visible,
-  .gt-card:focus-visible, .gt-input:focus-visible { outline: 3px solid Highlight; }
+  /* The marked bar and the hazard band are backgrounds, and backgrounds are
+     dropped here — measured: both vanished. Redraw them in system colours. */
+  .gt-btn--marked::before { background: CanvasText; forced-color-adjust: none; }
+  .gt-hazard { height: 0; background: none; box-shadow: none; border-top: 4px dashed CanvasText; }
+  .gt-plate:focus-visible, .gt-btn:focus-visible, .gt-card:focus-visible,
+  .gt-chip:focus-visible, .gt-input:focus-visible { outline: 3px solid Highlight; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRINT. Browsers drop backgrounds on paper by default (print-color-adjust:
+   economy), which leaves the light ink ramp on white — measured 1.19:1 for
+   ink-1, 2.85:1 for ink-3. Text goes black, the texture layers and hazard bands
+   go away, and plates become outlined boxes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media print {
+  .gt-grain, .gt-vignette, .gt-hazard { display: none; }
+  .gt-body, .gt-label, .gt-serial, .gt-tagline, .gt-chip, .gt-badge, .gt-btn,
+  .gt-btn[disabled], .gt-btn[aria-disabled="true"],
+  .gt-card, .gt-card--soon .gt-card__title, .gt-h1, .gt-h2, .gt-logo, .gt-num,
+  .gt-input, .gt-plate[disabled], .gt-plate[aria-disabled="true"] { color: #000; }
+  .gt-plate { color: #000; background: #fff; box-shadow: none; clip-path: none; border: 1px solid #000; }
+  .gt-card, .gt-panel, .gt-btn, .gt-chip, .gt-badge, .gt-input { background: #fff; box-shadow: none; border-color: #000; }
 }

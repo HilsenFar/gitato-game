@@ -10,9 +10,11 @@
      into inline styles (gamepad menu highlight; local-loop category tags), so
      those two names must keep resolving. They are aliases onto DS tokens now,
      not a second palette. --red / --gold / --bg follow the same rule.
-   • The HUD keeps px sizes and a glow instead of DS plates: it floats over a
-     live WebGL canvas, is pointer-events:none, and app.bundle.js overwrites
-     #combo-x colour/size/text-shadow inline every frame from its own tier table.
+   • The HUD keeps px sizes and its glow, but each group (combo, score, meter
+     labels, theme badge) now sits on a small opaque --gt-hud plate: it floats
+     over a live WebGL canvas, so without one the ink has no contrast guarantee.
+     The plate goes on the containers only — app.bundle.js overwrites #combo-x
+     colour/size/text-shadow inline every frame from its own tier table.
    • Round shapes (reticle, spinner, DROP button, transport buttons) keep 50%.
      That is a shape, not a value off the radius scale.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -34,7 +36,7 @@
      for caps; sentence-case help text reads wrong at .16em. */
   --g-track-desc: .05em;
 
-  /* HUD emission. Not a plate — a glow over rendered geometry. */
+  /* HUD emission: the glow on the text (the plate under it is --gt-hud). */
   --g-hud-glow: 0 0 12px rgba(25, 224, 255, .5);
 }
 
@@ -99,6 +101,12 @@ input[type=range]:focus-visible{
   text-shadow:var(--g-hud-glow); }
 #hud-top{ position:absolute; top:24px; left:0; right:0; display:flex; justify-content:space-between; padding:0 36px; }
 #combo{ display:flex; flex-direction:column; }
+/* Opaque plate under each HUD group. ink-2 on --gt-hud measures 11.2:1 and
+   ink-3 6.8:1 whatever the canvas draws; the glow stays on the text. Only the
+   containers get it — #combo-x and #score are styled inline by app.bundle.js. */
+#combo,#score-wrap,#theme-badge,#energy-label,#drop-label{ background:var(--gt-hud);
+  border:1px solid var(--gt-edge-hair); border-radius:var(--gt-r-2); padding:4px 10px; }
+#theme-badge:empty{ display:none; }   /* no empty plate before the bundle writes the theme name */
 #combo-x{ font-size:52px; font-weight:800; line-height:var(--gt-lh-tight); color:var(--gt-ink-1);
   text-shadow:0 0 24px var(--gt-cyan); transition:transform .08s var(--gt-ease-snap), color var(--gt-d-2) var(--gt-ease-soft); }
 #combo-label{ font-size:14px; letter-spacing:var(--gt-track-tag); color:var(--gt-ink-2); }
@@ -113,8 +121,12 @@ input[type=range]:focus-visible{
   transition:height .12s var(--gt-ease-soft); }
 #drop-bar{ position:absolute; bottom:0; left:0; right:0; height:0%; background:linear-gradient(0deg,var(--gt-sig),#fff);
   transition:height .12s var(--gt-ease-soft); }
-#energy-label,#drop-label{ position:absolute; bottom:-26px; left:50%; transform:translateX(-50%);
+/* Anchored to the meter's outer edge (not centred on it), so the plate can only
+   grow inwards: centred, the 82px ENERGY plate started 2px off-screen at 1366. */
+#energy-label,#drop-label{ position:absolute; bottom:-26px;
   font-size:11px; letter-spacing:var(--gt-track-tag); color:var(--gt-ink-2); white-space:nowrap; }
+#energy-label{ left:0; text-align:left; }
+#drop-label{ right:0; text-align:right; }
 #judgement{ position:absolute; top:38%; left:50%; transform:translate(-50%,-50%); font-size:54px;
   font-weight:800; opacity:0; letter-spacing:var(--gt-track-hero); }
 #rank-flash{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:200px;
@@ -147,7 +159,11 @@ input[type=range]:focus-visible{
 .screen::-webkit-scrollbar { width: 8px; }
 .screen::-webkit-scrollbar-thumb { background: var(--gt-edge-bezel); border-radius: var(--gt-r-1); }
 .screen::-webkit-scrollbar-thumb:hover { background: var(--gt-edge-lip); }
-#logo{ width:min(56vw,640px); filter:drop-shadow(0 0 40px rgba(25,224,255,.4)); }
+/* The PNG is 1024×1024 with the glyph in rows 338–684 — two thirds of it is
+   transparent padding. Sized by height and cropped to the glyph band with
+   object-fit, so the menu stays above the fold on 1366×768. */
+#logo{ width:auto; height:min(19vh, 215px); aspect-ratio:1024/352; object-fit:cover; object-position:center;
+  filter:drop-shadow(0 0 40px rgba(25,224,255,.4)); }
 #subtitle{ font-size:var(--gt-t-xl); letter-spacing:var(--gt-track-tag); color:var(--gt-sig-2-ink);
   text-shadow:0 0 20px var(--gt-sig-2); margin-top:-6px; }
 
@@ -372,28 +388,27 @@ a.btn{ display:block; text-decoration:none; }
   #score-label{ font-size:10px; }
   #hud-left{ left:10px; } #hud-right{ right:10px; }
   #hud-left,#hud-right{ width:14px; height:32vh; }
-  /* The meter labels are centred on a 14px-wide column pinned 10px from the
-     viewport edge, so a centred label only has ~24px of room on its outer side
-     before it leaves the screen. "ENERGY" needs ~42px and was being clipped —
-     5px in v1 at 2px tracking, 8px here at --gt-track-tag (.30em) on 9px.
-     Fixed for real by anchoring each label to its meter's outer edge instead of
-     its centre, so it can only grow inwards. One rung down on the tracking
-     scale as well, since .30em is a caps-tagline value on a 9px label. */
-  #energy-label,#drop-label{ font-size:9px; letter-spacing:var(--gt-track-label); }
-  #energy-label{ left:0; right:auto; transform:none; text-align:left; }
-  #drop-label{ left:auto; right:0; transform:none; text-align:right; }
+  /* The meter labels used to be centred on a 14px-wide column pinned 10px from
+     the viewport edge, so "ENERGY" (~42px) was clipped at the screen edge. They
+     are now anchored to the meter's outer edge at every width (see the base
+     rule). One rung down on the tracking scale, since .30em is a caps-tagline
+     value on a small label. 11px, not 9: 9px was below the legible floor. */
+  #energy-label,#drop-label{ font-size:11px; letter-spacing:var(--gt-track-label); }
   #judgement{ font-size:32px; }
   #rank-flash{ font-size:110px; }
   #rec-dot{ top:14px; font-size:12px; }
-  #theme-badge{ bottom:12px; font-size:10px; }
+  #theme-badge{ bottom:12px; font-size:11px; }
   #cockpit-avatar{ height:16vh; }
   #reticle{ width:74px; height:74px; margin:-37px 0 0 -37px; }
 
   .screen{ gap:var(--gt-s-3); padding:var(--gt-s-5) 0; }
-  #logo{ width:min(74vw,340px); }
+  #logo{ height:min(16vh, 120px); }
   .menu{ gap:9px; width:min(92vw,420px); }
   .btn{ padding:var(--gt-s-3) var(--gt-s-4); }
   #theme-picker{ flex-wrap:wrap; justify-content:center; max-width:94vw; }
+  /* 44px touch targets (were 32 / 34 px) */
+  .theme-opt{ padding:12px 14px; min-height:44px; }
+  #apk-link{ min-height:44px; padding:10px 16px; }
   #char-picker{ flex-wrap:wrap; justify-content:center; }
   .char-opt img{ width:52px; height:70px; }
   #buffer-picker{ max-width:94vw; }
@@ -421,4 +436,16 @@ a.btn{ display:block; text-decoration:none; }
   #rec-dot{ animation:none; opacity:1; }
   #drop-btn.ready{ animation:none; }
   .btn:hover, .btn.primary:hover, .jb-btn:hover, .jb-btn:active, .btn:active{ transform:none; }
+}
+
+/* ── Focus beats hover and beats the lit plates ───────────────────────────────
+   The :focus-visible rules at the top tie on specificity with .btn:hover,
+   .btn.primary, .char-opt.active and .jb-btn:hover, and those come later, so
+   the ring vanished while the pointer rested on a focused control and never
+   showed on the primary plate at all (WCAG 2.4.7). Last in the file, higher
+   specificity. */
+.btn:hover:focus-visible, .btn.primary:focus-visible, .btn.primary:hover:focus-visible,
+.char-opt.active:focus-visible, .jb-btn:hover:focus-visible,
+#apk-link:hover:focus-visible, #demucs-btn:hover:focus-visible{
+  box-shadow:var(--gt-focus-ring);
 }

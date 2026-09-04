@@ -1,5 +1,10 @@
 # Sound Engine v3 — every genre gets its own sound
 
+> Historical. The v3 composer was rolled back in commit 6426750. The three v3
+> tracks (psychedelic_145, industrialhardcore_185, industrialtechno_135) are
+> still in the bundle. `tools/soundengine-v3/verify_logic.mjs` fails against
+> the current app.bundle.js.
+
 **Date:** 2026-07-15 · **Scope:** `app.bundle.js`, `sw.js`, `assets/tracks/`, `tools/soundengine-v3/`
 
 ## The two bugs that were fixed

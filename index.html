@@ -58,7 +58,7 @@
 
   <!-- Menus -->
   <div id="screen-title" class="screen">
-    <img id="logo" alt="GITATO" />
+    <img id="logo" src="./assets/logo_gitato_t.png" width="1024" height="1024" alt="GITATO" />
     <div id="subtitle">HilsenFar</div>
     <div class="menu">
       <button class="btn primary" data-action="ascend">ASCEND <span>procedural · AI-forged track</span></button>
@@ -176,6 +176,28 @@
     <div id="jb-learn">learning your taste · <span id="jb-conf" class="gt-num">0%</span> · top: <span id="jb-top">—</span></div>
     <button class="btn" data-jb="stop" style="width:min(86vw,420px)">BACK TO MENU</button>
   </div>
+  <script>
+    // Back-button hygiene. app.bundle.js pushes a history entry per run (and
+    // again on every back-press pause) so that Android back pauses, then quits.
+    // It never pops those entries on QUIT / MENU / RESTART, so they pile up and
+    // leaving the site takes one extra back press per run. Pop whatever is
+    // left once the title screen is showing, and once at load (history.state
+    // survives a reload). The bundle's own popstate handler is a no-op while
+    // nothing runs, so these pops change nothing else.
+    (function () {
+      var title = document.getElementById('screen-title');
+      if (!title) return;
+      var settling = false;
+      function settle() {
+        if (title.classList.contains('hidden')) return;
+        var s = history.state;
+        if (s && s.gitatoRun) { settling = true; history.back(); }
+      }
+      new MutationObserver(settle).observe(title, { attributes: true, attributeFilter: ['class'] });
+      addEventListener('popstate', function () { if (settling) { settling = false; settle(); } });
+      settle();
+    })();
+  </script>
   <script defer src="./app.bundle.js"></script>
 </body>
 </html>

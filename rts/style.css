@@ -254,11 +254,19 @@ body {
   box-shadow: 0 1px 0 rgba(0, 0, 0, .6), 0 6px 18px -12px rgba(0, 0, 0, .9);
   font-size: var(--gt-t-base); font-weight: 700;
   z-index: 10;
-  /* Nudges the remaining glyph counters (◆ ⬢ ⛏ ⏸) that js/main.js writes as
-     text into monochrome text presentation, so they sit with the sprite icons
-     instead of against them. Ignored where unsupported. */
+  /* Nudges the remaining text glyphs (the queue line's ▲ ■ ● ▶ ⛏ that
+     js/main.js writes into #sel-info) into monochrome text presentation, so
+     they sit with the sprite icons instead of against them. Ignored where
+     unsupported. */
   font-variant-emoji: text;
 }
+/* Counters: sprite + number. js/main.js writes only the .count span. */
+#hud-res, #hud-sup { display: inline-flex; align-items: center; gap: var(--gt-s-1); }
+#btn-mine .count:empty { display: none; }
+/* Glyph swaps are class toggles (js/main.js, js/input.js): two sprites, one shown. */
+#btn-rp-pause .gi-paused, #btn-rp-pause.is-paused .gi-run,
+#btn-mute .gi-off, #btn-mute.is-muted .gi-on { display: none; }
+#btn-rp-pause.is-paused .gi-paused, #btn-mute.is-muted .gi-off { display: block; }
 #topbar span, #topbar button { white-space: nowrap; }
 #topbar .spacer { flex: 1; min-width: 0; }
 /* The right-hand tool cluster wraps as one block and stays right-aligned, so
@@ -266,10 +274,15 @@ body {
 #topbar .tools { display: flex; align-items: center; gap: var(--gt-s-2); margin-left: auto; }
 #hud-res { color: var(--gt-green-ink); }
 #hud-sup { color: var(--gt-ink-1); }
-/* #hud-color's colour is set inline by js/main.js to the live player colour —
-   the same hue as that player's units on the canvas. The label spells the
-   colour out in words, so the meaning does not rest on the hue. */
+/* #hud-color and #over-title take their colour from a class js/main.js sets
+   (.p0 / .p1 = the two players' ink tokens, the same hues as their units on
+   the canvas; .replay / .lost = amber / red ink). The label spells the colour
+   out in words, so the meaning does not rest on the hue. */
 #hud-color { font-weight: 700; letter-spacing: var(--gt-track-head); }
+#hud-color.p0, #over-title.p0 { color: var(--gt-sig-ink); }
+#hud-color.p1, #over-title.p1 { color: var(--gt-sig-2-ink); }
+#hud-color.replay, #over-title.replay { color: var(--gt-amber-ink); }
+#over-title.lost { color: var(--gt-red-ink); }
 #hud-room { color: var(--gt-amber-ink); font-size: var(--gt-t-sm); }
 
 /* Idle workers waiting: ink + edge + a corner dot, so it is not a colour-only
@@ -288,6 +301,16 @@ body {
   border-color: var(--gt-amber-dk);
 }
 #btn-amove.active:hover { background: var(--gt-warn); border-color: var(--gt-amber-dk); }
+
+/* Focus wins over hover and over lit plates (see the ds.css note on (0,2,0)
+   ties): the :focus-visible rules above lose to the later hover/.active rules
+   at equal specificity, so the ring vanished under the pointer and never
+   showed on an engaged segment. */
+.mbtn:hover:focus-visible, .tbtn:hover:focus-visible, .cbtn:hover:focus-visible,
+.tbtn.active:focus-visible, .tbtn.active:hover:focus-visible,
+.mbtn--primary:hover:focus-visible, .mbtn--online:hover:focus-visible,
+.mbtn--replay:hover:focus-visible, .mbtn--quiet:hover:focus-visible,
+#btn-amove.active:focus-visible, #btn-amove.active:hover:focus-visible { box-shadow: var(--gt-focus-ring); }
 
 #replaybar { display: none; align-items: center; gap: var(--gt-s-1); }
 #replaybar.show { display: flex; }
@@ -319,7 +342,10 @@ body {
   min-height: 1.1em; margin-bottom: var(--gt-s-1);
 }
 #card { display: flex; flex-wrap: wrap; gap: var(--gt-s-1); }
-#sel-info:has(+ #card:empty) { display: none; } /* #sel-info precedes #card in the DOM */
+#sel-info:empty { display: none; }
+/* Nothing selected (and, in replay, nothing to describe): hide the plate, not
+   just its label — an empty 18px box sat in the corner between selections. */
+#cardwrap:has(#card:empty):has(#sel-info:empty) { display: none; }
 /* badges js/main.js injects into #sel-info */
 .abadge { color: var(--gt-green-ink); font-weight: 700; }
 .qline  { color: var(--gt-plum-ink);  font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -420,7 +446,7 @@ body {
   border-radius: var(--gt-r-2);
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, .75), inset 0 -1px 0 var(--gt-lip);
 }
-#diff-label {
+#diff-label, #set-diff-label {
   color: var(--gt-ink-3);
   font-size: var(--gt-t-xs); font-weight: 700;
   letter-spacing: var(--gt-track-label);
@@ -446,7 +472,8 @@ body {
   text-indent: .35em;   /* re-centres text that trailing letter-spacing shifts */
   color: var(--gt-ink-1);
 }
-#join-code::placeholder { color: var(--gt-ink-4); letter-spacing: .35em; }
+/* ink-3, not ink-4: ink-4 measured 4.27:1 on the sunken field (AA needs 4.5). */
+#join-code::placeholder { color: var(--gt-ink-3); letter-spacing: .35em; }
 
 #menu-msg {
   color: var(--gt-warn-ink);
@@ -455,6 +482,8 @@ body {
   font-weight: 700;
   font-size: var(--gt-t-sm); letter-spacing: var(--gt-track-label);
 }
+/* .mbtn's display would otherwise beat the UA's [hidden] rule */
+#btn-cancel[hidden] { display: none; }
 
 /* ---------- how-to-play ---------- */
 .panel details {
@@ -541,8 +570,18 @@ body {
   .sheet { padding: var(--gt-s-5) var(--gt-s-4) var(--gt-s-4); }
 }
 
-/* Short viewports: keep the whole menu column reachable without scrolling. */
-@media (max-height: 720px) {
+/* Touch: every HUD, segment and command-card button reaches the 44px target.
+   The burger is the only way to pause without a keyboard, and it was 32px. */
+@media (pointer: coarse) {
+  :root { --rts-tbtn-h: 44px; }
+  .mbtn--quiet { min-height: 44px; }
+  .panel summary, .foot a { min-height: 44px; padding-block: .6em; }
+}
+
+/* Short viewports: keep the whole menu column reachable without scrolling.
+   (800, not 720: at 1366×768 the sheet measured 739px + 2×22px padding = 15px
+   of overflow and a scrollbar.) */
+@media (max-height: 800px) {
   :root { --rts-btn-h: 40px; }
   .sheet { gap: var(--gt-s-3); padding: var(--gt-s-5) var(--gt-s-4) var(--gt-s-4); }
   .sheet-logo { font-size: var(--gt-t-2xl); }
