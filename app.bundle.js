@@ -19990,7 +19990,8 @@ void main() {
     }
     async init() {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
-      if (this.ctx.state === "suspended") await this.ctx.resume();
+      if (this.ctx.state === "suspended") this.ctx.resume().catch(() => {
+      });
       this.master = this.ctx.createGain();
       this.musicGain = this.ctx.createGain();
       this.sfxGain = this.ctx.createGain();
@@ -22515,15 +22516,28 @@ void main() {
       if (this.manifest) this.manifest.inputs.push({ t: this.clock.songTime(), type, ...data });
     }
     startCapture() {
-      if (this.recording) return;
-      const vstream = this.canvas.captureStream(60);
+      if (this.recording || !this.clock) return;
+      if (!window.MediaRecorder || !this.canvas.captureStream) return;
+      const vstream = this.canvas.captureStream(30);
       const dest = this.clock.ctx.createMediaStreamDestination();
       this._tap = this.clock.recordTap || this.clock.master;
       this._dest = dest;
       this._tap.connect(dest);
       for (const tr of dest.stream.getAudioTracks()) vstream.addTrack(tr);
-      const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus") ? "video/webm;codecs=vp9,opus" : "video/webm";
-      this.rec = new MediaRecorder(vstream, { mimeType: mime, videoBitsPerSecond: 24e6 });
+      const mime = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/webm;codecs=vp9,opus", "video/webm", "video/mp4"].find((m) => MediaRecorder.isTypeSupported(m));
+      if (!mime) return;
+      this.mime = mime;
+      try {
+        this.rec = new MediaRecorder(vstream, { mimeType: mime, videoBitsPerSecond: 6e6 });
+      } catch (e) {
+        try {
+          this._tap.disconnect(dest);
+        } catch (_) {
+        }
+        this._tap = null;
+        this._dest = null;
+        return;
+      }
       this.chunks = [];
       this.rec.ondataavailable = (e) => {
         if (e.data.size) this.chunks.push(e.data);
@@ -22542,7 +22556,7 @@ void main() {
           }
           this._tap = null;
           this._dest = null;
-          res(new Blob(this.chunks, { type: "video/webm" }));
+          res(new Blob(this.chunks, { type: (this.mime || "video/webm").split(";")[0] }));
         };
         this.rec.stop();
       });
@@ -23032,10 +23046,14 @@ void main() {
     document.addEventListener("pointerdown", initAudioOnce, { once: true });
     initThree();
   }
-  async function initAudioOnce() {
-    if (state.clock) return;
-    state.clock = new AudioClock();
-    await state.clock.init();
+  function initAudioOnce() {
+    return state.audioReady || (state.audioReady = buildAudio());
+  }
+  async function buildAudio() {
+    const clock = new AudioClock();
+    await clock.init();
+    state.clock = clock;
+    if (state.recorder) state.recorder.clock = clock;
     state.bus = new VisualBus(state.clock);
     state.scheduler = new Scheduler(state.clock);
     state.gen = new GenMusic(state.clock);
@@ -23059,12 +23077,16 @@ void main() {
     state.texMap.chicken = await load("theme_chicken.png");
     state.texMap.unicorn = await load("theme_unicorn.png");
     state.tributeTex = await load("tribute_hilsen_far.webp");
-    state.recorder = new Recorder(canvas, state.clock || await ensureClock());
+    state.recorder = new Recorder(canvas, state.clock);
     idleLoop();
   }
   async function ensureClock() {
-    if (!state.clock) {
-      await initAudioOnce();
+    await initAudioOnce();
+    if (state.clock.ctx.state !== "running") {
+      try {
+        await state.clock.ctx.resume();
+      } catch (e) {
+      }
     }
     return state.clock;
   }
@@ -23512,8 +23534,12 @@ void main() {
       audioFile: audioFile || null,
       mode: forgedBuf ? "forged" : useImported ? "imported" : "local"
     });
-    state.recorder.startCapture();
-    state.hud.rec(true);
+    try {
+      state.recorder.startCapture();
+    } catch (e) {
+      console.warn("recording unavailable", e);
+    }
+    state.hud.rec(!!state.recorder.recording);
     const rate = practice ? 0.7 : 1;
     const startAt = state.clock.ctx.currentTime + 0.12;
     state.clock.markStart(bpm, map.beatOffset || 0, startAt);
@@ -23573,6 +23599,7 @@ void main() {
     state.scheduler.update(state.game?.lead ?? 0);
     const snap = state.bus.update(dt);
     pollGamepadGameplay(dt);
+    if (!state.running) return;
     state.game.update(dt);
     state.scene.react(snap, state.game.combo, state.game.energy, dt);
     if ((snap.dropActive || snap.beat % 16 < 0.1) && snap.onsetSub > 0.5) state.scene.triggerShock(snap.onsetSub);
@@ -23606,7 +23633,7 @@ void main() {
       const path = await bridge.render4K(state.recorder.manifest);
       if (path) return toast("Saved 4K/60 video \u2192 " + path);
     }
-    if (state.lastBlob) downloadBlob(state.lastBlob, "gitato-run.webm");
+    if (state.lastBlob) downloadBlob(state.lastBlob, "gitato-run." + clipExt(state.lastBlob));
   }
   async function saveAudio() {
     if (bridge && bridge.saveAudio && state.recorder.manifest) {
@@ -23618,12 +23645,15 @@ void main() {
   async function share() {
     if (bridge && bridge.share && state.recorder.manifest) return bridge.share(state.recorder.manifest);
     if (state.lastBlob && navigator.share) {
-      const f = new File([state.lastBlob], "gitato-run.webm", { type: "video/webm" });
+      const f = new File([state.lastBlob], "gitato-run." + clipExt(state.lastBlob), { type: state.lastBlob.type || "video/webm" });
       try {
         await navigator.share({ files: [f], title: "My GITATO run" });
       } catch (e) {
       }
     } else toast("Sharing available in the desktop build.");
+  }
+  function clipExt(blob) {
+    return /mp4/.test(blob.type) ? "mp4" : "webm";
   }
   function downloadBlob(blob, name) {
     const a = document.createElement("a");
@@ -23825,4 +23855,3 @@ three/build/three.module.js:
    * SPDX-License-Identifier: MIT
    *)
 */
-//# sourceMappingURL=app.bundle.js.map
