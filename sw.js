@@ -1,8 +1,12 @@
 // GITATO service worker — bump VERSION on every deploy (PWA rule for all gitato sites).
-const VERSION = 'gitato-game-v21';
+const VERSION = 'gitato-game-v22';
 const SHELL = [
   './',
   './index.html',
+  './fonts.css',
+  './fonts/chakra-petch-500.woff2',
+  './fonts/chakra-petch-700.woff2',
+  './fonts/barlow-400.woff2',
   './ds.css',
   './icons.svg',
   './style.css',
@@ -10,7 +14,7 @@ const SHELL = [
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './assets/logo_gitato_t.png',
+  './assets/logo_gitato.webp',
 ];
 
 self.addEventListener('install', (e) => {

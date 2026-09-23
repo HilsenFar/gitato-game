@@ -1,0 +1,77 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   GITATO DESIGN SYSTEM v2.1 — self-hosted fonts
+   Link this BEFORE ds.css and ship the fonts/ folder next to it:
+
+       <link rel="preload" href="fonts/chakra-petch-700.woff2" as="font" type="font/woff2" crossorigin>
+       <link rel="stylesheet" href="fonts.css">
+       <link rel="stylesheet" href="ds.css">
+
+   Why self-hosted: v2.0 pulled all three families from Google Fonts through an
+   @import at the top of ds.css. That cost a render-blocking round trip to two
+   extra origins (the @import is only discovered after ds.css itself arrives),
+   and every visitor's IP went to Google before a single glyph was drawn.
+   The files below are the latin subset (English + Danish + the punctuation the
+   sites actually use), 150 kB for all eight faces, served from our own origin.
+
+   Orbitron ships as ONE weight, 800. The logotype asks for 900; declaring the
+   face as `font-weight: 800 900` makes the browser use the real 800 outline for
+   900 instead of smearing a synthetic bold over it.
+
+   Licences: SIL Open Font License 1.1 — fonts/OFL-*.txt travel with the files.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@font-face {
+  font-family: "Orbitron";
+  font-style: normal;
+  font-weight: 700 900;
+  font-display: swap;
+  src: url("fonts/orbitron-800.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Chakra Petch";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/chakra-petch-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Chakra Petch";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/chakra-petch-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Chakra Petch";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/chakra-petch-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/barlow-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/barlow-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/barlow-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/barlow-700.woff2") format("woff2");
+}

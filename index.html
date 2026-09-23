@@ -11,12 +11,11 @@
   <link rel="apple-touch-icon" href="./icons/icon-180.png" />
   <meta property="og:title" content="GITATO – HilsenFar" />
   <meta property="og:description" content="On-rails lock-on rhythm flyer. Hard genres, synesthetic visuals, play free in the browser." />
-  <!-- Brand typography. v1 asked for Rajdhani in style.css and never fetched it,
-       so the game rendered in Segoe UI. Loaded the same way beatsurfer does. -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Chakra+Petch:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- GITATO Design System v2 — must come before style.css so the surface can override -->
+  <!-- Brand typography, self-hosted (DS v2.1): no render-blocking trip to
+       Google and no visitor IP sent there. fonts.css must precede ds.css. -->
+  <link rel="preload" href="./fonts/chakra-petch-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="./fonts.css" />
+  <!-- GITATO Design System v2.1 — must come before style.css so the surface can override -->
   <link rel="stylesheet" href="./ds.css" />
   <link rel="stylesheet" href="./style.css" />
   <script>
@@ -58,14 +57,14 @@
 
   <!-- Menus -->
   <div id="screen-title" class="screen">
-    <img id="logo" src="./assets/logo_gitato_t.png" width="1024" height="1024" alt="GITATO" />
+    <img id="logo" src="./assets/logo_gitato.webp" width="1024" height="352" alt="GITATO" fetchpriority="high" />
     <div id="subtitle">HilsenFar</div>
     <div class="menu">
       <button class="btn primary" data-action="ascend">ASCEND <span>procedural · AI-forged track</span></button>
       <button class="btn" data-action="origins">ORIGINS <span>history of the harder styles</span></button>
       <button class="btn" data-action="import">IMPORT TRACK <span>play your own audio</span></button>
       <button class="btn" data-action="jukebox">PLAY MUSIC <span>endless generated mix · no gameplay</span></button>
-      <button class="btn" data-action="practice">PRACTICE <span>slow-mode, wider windows</span></button>
+      <button class="btn" data-action="practice">PRACTICE <span>slow mode, no fail</span></button>
       <button class="btn" data-action="settings">SETTINGS</button>
     </div>
     <div id="theme-picker">
@@ -92,7 +91,7 @@
     <button id="demucs-btn" class="hidden"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-gear"></use></svg>ENABLE REAL KICK (Demucs)</button>
     <div id="controls-hint">
       <span class="ch pointer-fine"><b>Mouse/Click</b> aim &amp; fire · shoot to the beat · <b>SPACE</b> drop</span>
-      <span class="ch pointer-fine"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-gamepad"></use></svg><b>Pad</b> L-stick aim · <b>R2/A</b> fire · <b>X/□</b> drop · <b>L1</b> dodge · <b>Options</b> pause</span>
+      <span class="ch pointer-fine"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-gamepad"></use></svg><b>Pad</b> L-stick aim · <b>R2/A</b> fire · <b>X/□</b> drop · <b>Options</b> pause</span>
       <span class="ch pointer-coarse"><svg class="gi" aria-hidden="true"><use href="./icons.svg#gi-touch"></use></svg><b>Touch</b> hold &amp; drag to paint targets · release to fire · tap <b>DROP</b> when it glows</span>
     </div>
   </div>
@@ -115,7 +114,20 @@
         <span class="setting-note">Extra synthesized kick on top of the track — OFF by default. It follows the track's beatgrid and goes quiet in breakdowns.</span>
       </div>
       <button class="btn" id="settings-hitsound-btn">HIT SOUNDS: ON <span>the little blips when you lock &amp; hit targets</span></button>
+      <button class="btn" data-action="calibrate">CALIBRATE AUDIO <span id="cal-current">tap along to a click · fixes Bluetooth delay</span></button>
       <button class="btn" data-action="to-title">BACK TO MENU</button>
+    </div>
+  </div>
+
+  <div id="screen-calibrate" class="screen hidden">
+    <div class="forge-title">CALIBRATE AUDIO</div>
+    <div class="forge-sub">Tap on every click: SPACE, a click, a tap or pad A. 12 taps.</div>
+    <button id="cal-tap" class="cal-tap" type="button" aria-describedby="cal-result">TAP</button>
+    <div id="cal-dots" class="cal-dots" aria-hidden="true"></div>
+    <div id="cal-result" class="forge-status" role="status"></div>
+    <div class="menu">
+      <button class="btn" data-action="cal-reset">RESET TO 0 ms</button>
+      <button class="btn" data-action="cal-back">BACK</button>
     </div>
   </div>
 
@@ -142,7 +154,7 @@
     <div id="result-stats"></div>
     <div class="menu">
       <button class="btn primary" data-action="retry">ONE MORE</button>
-      <button class="btn" data-action="save-video">SAVE VIDEO (4K/60)</button>
+      <button class="btn" data-action="save-video">SAVE CLIP</button>
       <button class="btn" data-action="save-audio">SAVE AUDIO (lossless)</button>
       <button class="btn" data-action="share">SHARE…</button>
       <button class="btn" data-action="to-title">MENU</button>
@@ -191,7 +203,7 @@
       function settle() {
         if (title.classList.contains('hidden')) return;
         var s = history.state;
-        if (s && s.gitatoRun) { settling = true; history.back(); }
+        if (s && (s.gitatoRun || s.gitatoScreen)) { settling = true; history.back(); }
       }
       new MutationObserver(settle).observe(title, { attributes: true, attributeFilter: ['class'] });
       addEventListener('popstate', function () { if (settling) { settling = false; settle(); } });

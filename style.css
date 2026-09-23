@@ -423,6 +423,27 @@ a.btn{ display:block; text-decoration:none; }
   .jb-btn.big{ width:68px; height:68px; }
 }
 
+/* ── calibration ─────────────────────────────────────────────────────────── */
+.cal-tap{ width:min(70vw, 280px); height:min(28vh, 180px); border-radius:var(--gt-r-3);
+  background:var(--gt-pl-2); color:var(--gt-ink-1); border:2px solid var(--gt-edge-lip);
+  font-family:var(--gt-font-ui); font-weight:700; font-size:var(--gt-t-xl); letter-spacing:var(--gt-track-btn);
+  cursor:pointer; touch-action:manipulation; user-select:none; }
+.cal-tap:active{ background:var(--gt-sig); color:var(--gt-ink-on-lit); border-color:var(--gt-sig); }
+.cal-dots{ font-size:var(--gt-t-md); letter-spacing:.3em; color:var(--gt-sig-ink); min-height:1.4em; }
+#cal-result{ max-width:min(90vw, 560px); text-align:center; }
+
+/* ── phone held sideways (the installed PWA is locked to landscape) ────────────
+   844x390: the round DROP button sat on top of the DROP meter it tells you to
+   watch, and QUIT TO MENU fell below the bottom edge of the pause menu. */
+@media (max-height: 480px){
+  #drop-btn{ right:auto; left:max(64px, env(safe-area-inset-left)); bottom:max(16px, env(safe-area-inset-bottom)); width:72px; height:72px; }
+  #hud-left,#hud-right{ height:34vh; }
+  #screen-pause .menu{ gap:8px; }
+  #screen-pause .btn span{ display:none; }
+  .forge-title{ font-size:var(--gt-t-xl); }
+  .screen{ gap:var(--gt-s-2); }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    MOTION PREFERENCE
    ds.css already collapses every duration. These rules give the decorative
@@ -448,4 +469,13 @@ a.btn{ display:block; text-decoration:none; }
 .char-opt.active:focus-visible, .jb-btn:hover:focus-visible,
 #apk-link:hover:focus-visible, #demucs-btn:hover:focus-visible{
   box-shadow:var(--gt-focus-ring);
+}
+
+/* pad-only first visit: the browser needs one key press or tap before audio may start */
+.gesture-hint {
+  position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  z-index: 50; max-width: calc(100vw - 32px); padding: 10px 16px;
+  background: var(--gt-hud); color: var(--gt-ink-1); border: 1px solid var(--gt-edge-lip);
+  box-shadow: inset 0 1px 0 var(--gt-lip), inset 0 -1px 0 var(--gt-occl);
+  font: 600 14px/1.35 var(--gt-font-ui); letter-spacing: .04em; text-align: center;
 }

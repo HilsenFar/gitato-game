@@ -37,10 +37,12 @@
                  more legible than Orbitron below ~20px.
    Barlow  body copy. Rajdhani (v1's choice) is a condensed face; it is fine for
            a HUD and genuinely hard work for a paragraph.
-   Loaded from Google Fonts, matching how beatsurfer already does it — that was
-   the one surface where the brand typography actually reached the screen.
+   v2.1: the faces are self-hosted. Link gitato-fonts.css (shipped as fonts.css,
+   with its fonts/ folder) before this file. v2.0 had a Google Fonts @import
+   here; it was render-blocking (discovered only after ds.css arrived) and sent
+   every visitor to a third-party origin. Without fonts.css the stacks below
+   fall back to system faces, so nothing breaks, it just looks generic.
    ─────────────────────────────────────────────────────────────────────────── */
-@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Chakra+Petch:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap");
 
 :root {
   /* ═══ SUBSTRATE ══════════════════════════════════════════════════════════
