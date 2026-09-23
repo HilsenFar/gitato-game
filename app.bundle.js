@@ -4802,7 +4802,7 @@
       }
       return _v3$2.x >= 0 && _v3$2.y >= 0 && _v3$2.x + _v3$2.y <= 1;
     }
-    static getInterpolation(point, p1, p2, p3, v1, v2, v32, target) {
+    static getInterpolation(point, p1, p2, p3, v1, v2, v3, target) {
       if (this.getBarycoord(point, p1, p2, p3, _v3$2) === null) {
         target.x = 0;
         target.y = 0;
@@ -4813,7 +4813,7 @@
       target.setScalar(0);
       target.addScaledVector(v1, _v3$2.x);
       target.addScaledVector(v2, _v3$2.y);
-      target.addScaledVector(v32, _v3$2.z);
+      target.addScaledVector(v3, _v3$2.z);
       return target;
     }
     static isFrontFacing(a, b, c, direction) {
@@ -4865,8 +4865,8 @@
     getBarycoord(point, target) {
       return _Triangle.getBarycoord(point, this.a, this.b, this.c, target);
     }
-    getInterpolation(point, v1, v2, v32, target) {
-      return _Triangle.getInterpolation(point, this.a, this.b, this.c, v1, v2, v32, target);
+    getInterpolation(point, v1, v2, v3, target) {
+      return _Triangle.getInterpolation(point, this.a, this.b, this.c, v1, v2, v3, target);
     }
     containsPoint(point) {
       return _Triangle.containsPoint(point, this.a, this.b, this.c);
@@ -9072,18 +9072,18 @@
     };
   }
   function WebGLBufferRenderer(gl, extensions, info) {
-    let mode;
+    let mode2;
     function setMode(value) {
-      mode = value;
+      mode2 = value;
     }
     function render(start, count) {
-      gl.drawArrays(mode, start, count);
-      info.update(count, mode, 1);
+      gl.drawArrays(mode2, start, count);
+      info.update(count, mode2, 1);
     }
     function renderInstances(start, count, primcount) {
       if (primcount === 0) return;
-      gl.drawArraysInstanced(mode, start, count, primcount);
-      info.update(count, mode, primcount);
+      gl.drawArraysInstanced(mode2, start, count, primcount);
+      info.update(count, mode2, primcount);
     }
     function renderMultiDraw(starts, counts, drawCount) {
       if (drawCount === 0) return;
@@ -9093,12 +9093,12 @@
           this.render(starts[i], counts[i]);
         }
       } else {
-        extension.multiDrawArraysWEBGL(mode, starts, 0, counts, 0, drawCount);
+        extension.multiDrawArraysWEBGL(mode2, starts, 0, counts, 0, drawCount);
         let elementCount = 0;
         for (let i = 0; i < drawCount; i++) {
           elementCount += counts[i];
         }
-        info.update(elementCount, mode, 1);
+        info.update(elementCount, mode2, 1);
       }
     }
     function renderMultiDrawInstances(starts, counts, drawCount, primcount) {
@@ -9109,13 +9109,13 @@
           renderInstances(starts[i], counts[i], primcount[i]);
         }
       } else {
-        extension.multiDrawArraysInstancedWEBGL(mode, starts, 0, counts, 0, primcount, 0, drawCount);
+        extension.multiDrawArraysInstancedWEBGL(mode2, starts, 0, counts, 0, primcount, 0, drawCount);
         let elementCount = 0;
         for (let i = 0; i < drawCount; i++) {
           elementCount += counts[i];
         }
         for (let i = 0; i < primcount.length; i++) {
-          info.update(elementCount, mode, primcount[i]);
+          info.update(elementCount, mode2, primcount[i]);
         }
       }
     }
@@ -10277,9 +10277,9 @@
     };
   }
   function WebGLIndexedBufferRenderer(gl, extensions, info) {
-    let mode;
+    let mode2;
     function setMode(value) {
-      mode = value;
+      mode2 = value;
     }
     let type, bytesPerElement;
     function setIndex(value) {
@@ -10287,13 +10287,13 @@
       bytesPerElement = value.bytesPerElement;
     }
     function render(start, count) {
-      gl.drawElements(mode, count, type, start * bytesPerElement);
-      info.update(count, mode, 1);
+      gl.drawElements(mode2, count, type, start * bytesPerElement);
+      info.update(count, mode2, 1);
     }
     function renderInstances(start, count, primcount) {
       if (primcount === 0) return;
-      gl.drawElementsInstanced(mode, count, type, start * bytesPerElement, primcount);
-      info.update(count, mode, primcount);
+      gl.drawElementsInstanced(mode2, count, type, start * bytesPerElement, primcount);
+      info.update(count, mode2, primcount);
     }
     function renderMultiDraw(starts, counts, drawCount) {
       if (drawCount === 0) return;
@@ -10303,12 +10303,12 @@
           this.render(starts[i] / bytesPerElement, counts[i]);
         }
       } else {
-        extension.multiDrawElementsWEBGL(mode, counts, 0, type, starts, 0, drawCount);
+        extension.multiDrawElementsWEBGL(mode2, counts, 0, type, starts, 0, drawCount);
         let elementCount = 0;
         for (let i = 0; i < drawCount; i++) {
           elementCount += counts[i];
         }
-        info.update(elementCount, mode, 1);
+        info.update(elementCount, mode2, 1);
       }
     }
     function renderMultiDrawInstances(starts, counts, drawCount, primcount) {
@@ -10319,13 +10319,13 @@
           renderInstances(starts[i] / bytesPerElement, counts[i], primcount[i]);
         }
       } else {
-        extension.multiDrawElementsInstancedWEBGL(mode, counts, 0, type, starts, 0, primcount, 0, drawCount);
+        extension.multiDrawElementsInstancedWEBGL(mode2, counts, 0, type, starts, 0, primcount, 0, drawCount);
         let elementCount = 0;
         for (let i = 0; i < drawCount; i++) {
           elementCount += counts[i];
         }
         for (let i = 0; i < primcount.length; i++) {
-          info.update(elementCount, mode, primcount[i]);
+          info.update(elementCount, mode2, primcount[i]);
         }
       }
     }
@@ -10348,9 +10348,9 @@
       points: 0,
       lines: 0
     };
-    function update(count, mode, instanceCount) {
+    function update(count, mode2, instanceCount) {
       render.calls++;
-      switch (mode) {
+      switch (mode2) {
         case gl.TRIANGLES:
           render.triangles += instanceCount * (count / 3);
           break;
@@ -10367,7 +10367,7 @@
           render.points += instanceCount * count;
           break;
         default:
-          console.error("THREE.WebGLInfo: Unknown draw mode:", mode);
+          console.error("THREE.WebGLInfo: Unknown draw mode:", mode2);
           break;
       }
     }
@@ -20247,19 +20247,26 @@ void main() {
   };
 
   // renderer/js/engine/flags.js
-  var v3 = false;
+  var V2_KEPT = /* @__PURE__ */ new Set(["psychedelic", "forestpsy"]);
+  var mode = "auto";
   try {
-    const q = new URLSearchParams(location.search).get("engine");
-    v3 = q ? q === "v3" : store.getItem("gitato.engine") === "v3";
+    const m = new URLSearchParams(location.search).get("engine") || store.getItem("gitato.engine");
+    mode = m === "v3" || m === "v2" ? m : "auto";
   } catch (e) {
-    v3 = false;
+    mode = "auto";
+  }
+  function engineV3For(genre) {
+    return mode === "v3" ? true : mode === "v2" ? false : !V2_KEPT.has(genre);
   }
   function engineV3() {
-    return v3;
+    return mode !== "v2";
+  }
+  function bundledTracksOn() {
+    return mode === "v2";
   }
   var RETIRED_V3 = /* @__PURE__ */ new Set(["crossbreed", "doomcore", "raggatek"]);
   function genrePool(keys) {
-    return v3 ? keys.filter((g) => !RETIRED_V3.has(g)) : keys;
+    return engineV3() ? keys.filter((g) => !RETIRED_V3.has(g)) : keys;
   }
 
   // renderer/js/engine/kick-layer.js
@@ -20309,7 +20316,8 @@ void main() {
   };
   function kickRecipe(genre) {
     const base = KICK_RECIPE[genre] || KICK_RECIPE.hardcore;
-    return engineV3() && KICK_V3[genre] ? { ...base, ...KICK_V3[genre] } : base;
+    const v3 = engineV3For(genre);
+    return v3 && KICK_V3[genre] ? { ...base, ...KICK_V3[genre], v3 } : { ...base, v3 };
   }
   var _distCurves = /* @__PURE__ */ new Map();
   function distCurve(amount) {
@@ -20326,7 +20334,7 @@ void main() {
     return c;
   }
   function synthKick(ctx, dest, t, r, vel = 1, level = 1, opts = {}) {
-    const V3 = engineV3();
+    const V3 = r.v3 !== void 0 ? r.v3 : engineV3();
     const tailGain = opts.tailGain != null ? opts.tailGain : 0.35;
     const nodes = [];
     const amp = ctx.createGain();
@@ -20619,7 +20627,7 @@ void main() {
       this.seed = seed;
       this.rng = mulberry32(seed);
       this.genre = genre;
-      const V3 = engineV3();
+      const V3 = engineV3For(genre);
       this.v3 = V3;
       const recipe = V3 && genre === "hardtek" && this.rng() < 0.35 ? "raggatek" : genre;
       const g0 = GENRES[recipe] || GENRES.hardstyle;
@@ -22955,17 +22963,13 @@ void main() {
 
   // renderer/js/engine/jukebox.js
   var Jukebox = class {
-    // trackFor(genre) -> { url, bpm } | null  (optional, supplied by app.js)
-    constructor(clock, taste, trackFor = null) {
+    constructor(clock, taste) {
       this.clock = clock;
       this.taste = taste;
       this.gen = new GenMusic(clock);
-      this.trackFor = trackFor;
       this.playing = false;
       this.current = null;
       this._timer = null;
-      this._src = null;
-      this._srcGain = null;
       this._token = 0;
       this.onTrack = null;
     }
@@ -22982,7 +22986,6 @@ void main() {
         this.gen.stop();
       } catch (e) {
       }
-      this._stopTrack();
       this.current = null;
     }
     // mark the current track and learn from it
@@ -23008,23 +23011,6 @@ void main() {
       if (this.current) this.taste.skip(this.current.genre);
       this._next();
     }
-    _stopTrack() {
-      if (!this._src) return;
-      const now2 = this.clock.ctx.currentTime, src = this._src, g = this._srcGain;
-      try {
-        g.gain.setTargetAtTime(0, now2, 0.015);
-        src.stop(now2 + 0.08);
-      } catch (e) {
-      }
-      setTimeout(() => {
-        try {
-          g.disconnect();
-        } catch (e) {
-        }
-      }, 150);
-      this._src = null;
-      this._srcGain = null;
-    }
     async _next() {
       if (!this.playing) return;
       clearTimeout(this._timer);
@@ -23033,52 +23019,14 @@ void main() {
         this.gen.stop();
       } catch (e) {
       }
-      this._stopTrack();
-      this.current = null;
       const genre = this.taste.pick();
       const ctx = this.clock.ctx;
-      const real = engineV3() && this.trackFor ? this.trackFor(genre) : null;
-      let durationSec, bpm, comp = null;
-      if (real) {
-        try {
-          const ac = new AbortController(), to = setTimeout(() => ac.abort(), 1e4);
-          let ab;
-          try {
-            const res = await fetch(real.url, { signal: ac.signal });
-            if (!res.ok) throw new Error("HTTP " + res.status);
-            ab = await res.arrayBuffer();
-          } finally {
-            clearTimeout(to);
-          }
-          const buf = await ctx.decodeAudioData(ab);
-          if (token !== this._token || !this.playing) return;
-          const startAt = ctx.currentTime + 0.1;
-          const g = ctx.createGain();
-          g.gain.value = real.gain || 1;
-          g.connect(this.clock.musicGain);
-          const src = ctx.createBufferSource();
-          src.buffer = buf;
-          src.connect(g);
-          src.start(startAt);
-          this._src = src;
-          this._srcGain = g;
-          durationSec = buf.duration;
-          bpm = real.bpm;
-          this.clock.markStart(bpm, 0, startAt);
-        } catch (e) {
-          if (token !== this._token) return;
-          durationSec = null;
-        }
-      }
-      if (!this._src) {
-        comp = this.gen.compose(genre);
-        const startAt = ctx.currentTime + 0.1;
-        this.clock.markStart(comp.bpm, 0, startAt);
-        this.gen.play(startAt);
-        durationSec = comp.durationSec;
-        bpm = comp.bpm;
-      }
-      this.current = { genre, bpm, durationSec, startedAt: ctx.currentTime + 0.1, comp, real: !!this._src };
+      const comp = this.gen.compose(genre);
+      const startAt = ctx.currentTime + 0.1;
+      this.clock.markStart(comp.bpm, 0, startAt);
+      this.gen.play(startAt);
+      const durationSec = comp.durationSec, bpm = comp.bpm;
+      this.current = { genre, bpm, durationSec, startedAt: startAt, comp };
       if (this.onTrack) this.onTrack(this.current);
       const ms = Math.max(8e3, (durationSec + 0.3) * 1e3);
       this._timer = setTimeout(() => {
@@ -23444,10 +23392,7 @@ void main() {
     state.kick = new KickLayer(state.clock);
     state.kick.setAmount(parseFloat(store.getItem("gitato.reinforce2") || "0"));
     state.taste = new Taste();
-    state.jukebox = new Jukebox(state.clock, state.taste, (genre) => {
-      const bt = BUNDLED_TRACKS[genre];
-      return bt ? { url: ASSETS + bt.file, bpm: bt.bpm } : null;
-    });
+    state.jukebox = new Jukebox(state.clock, state.taste);
     state.jukebox.onTrack = (m) => updateJukeboxUI(m);
     refreshCalLabel();
   }
@@ -23842,23 +23787,23 @@ void main() {
     });
     return map;
   }
-  async function startForge(mode, practice = false) {
+  async function startForge(mode2, practice = false) {
     if (state.starting || state.running) return;
     state.starting = true;
     try {
-      return await forgeAndBegin(mode, practice);
+      return await forgeAndBegin(mode2, practice);
     } finally {
       state.starting = false;
     }
   }
-  async function forgeAndBegin(mode, practice) {
-    state.mode = mode;
+  async function forgeAndBegin(mode2, practice) {
+    state.mode = mode2;
     state._kickRemoved = false;
     state._beatEnergy = null;
     state._useBuffer = null;
     showScreen("screen-forge");
     state.hud.show(false);
-    const genreKeys = mode === "origins" ? ["hardcore", "hardstyle", "frenchcore", "psytrance"] : genrePool(Object.keys(GENRES));
+    const genreKeys = mode2 === "origins" ? ["hardcore", "hardstyle", "frenchcore", "psytrance"] : genrePool(Object.keys(GENRES));
     const genre = genreKeys[Math.random() * genreKeys.length | 0];
     document.getElementById("forge-genre").textContent = `${genre} \xB7 ${GENRES[genre].bpm} BPM`;
     let li = 0;
@@ -23886,7 +23831,7 @@ void main() {
       console.warn("AI forge failed, trying bundled track", e);
     }
     if (!map) {
-      const bt = BUNDLED_TRACKS[genre] || null;
+      const bt = bundledTracksOn() ? BUNDLED_TRACKS[genre] || null : null;
       if (bt) {
         try {
           const url = ASSETS + bt.file;
