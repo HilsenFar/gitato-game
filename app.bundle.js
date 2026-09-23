@@ -23082,7 +23082,7 @@ void main() {
   }
   async function ensureClock() {
     await initAudioOnce();
-    if (state.clock.ctx.state !== "running") {
+    if (!state.paused && state.clock.ctx.state !== "running") {
       try {
         await state.clock.ctx.resume();
       } catch (e) {
